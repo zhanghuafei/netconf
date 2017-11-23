@@ -173,17 +173,18 @@ public abstract class AbstractWriteTx implements DOMDataWriteTransaction {
 
         Futures.addCallback(Futures.allAsList(resultsFutures), new FutureCallback<List<DOMRpcResult>>() {
             @Override
-            public void onSuccess(final List<DOMRpcResult> domRpcResults) {
-                domRpcResults.forEach(domRpcResult -> {
-                    if(!domRpcResult.getErrors().isEmpty() && !transformed.isDone()) {
-                        final NetconfDocumentedException exception =
-                                new NetconfDocumentedException(id + ":RPC during tx failed",
-                                        DocumentedException.ErrorType.APPLICATION,
-                                        DocumentedException.ErrorTag.OPERATION_FAILED,
-                                        DocumentedException.ErrorSeverity.ERROR);
-                        transformed.setException(exception);
-                    }
-                });
+					public void onSuccess(final List<DOMRpcResult> domRpcResults) {
+						domRpcResults.forEach(domRpcResult -> {
+							if (!domRpcResult.getErrors().isEmpty()
+									&& !transformed.isDone()) {
+								RpcResult<TransactionStatus> result = RpcResultBuilder
+										.<TransactionStatus> failed()
+										.withResult(TransactionStatus.FAILED)
+										.withRpcErrors(domRpcResult.getErrors())
+										.build();
+								transformed.set(result);
+							}
+						});
 
                 if(!transformed.isDone()) {
                     transformed.set(RpcResultBuilder.success(TransactionStatus.COMMITED).build());

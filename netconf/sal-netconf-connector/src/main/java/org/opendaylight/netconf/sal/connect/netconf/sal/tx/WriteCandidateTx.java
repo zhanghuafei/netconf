@@ -125,7 +125,11 @@ public class WriteCandidateTx extends AbstractWriteTx {
         Futures.addCallback(txResult, new FutureCallback<RpcResult<TransactionStatus>>() {
             @Override
             public void onSuccess(@Nullable final RpcResult<TransactionStatus> result) {
-                cleanupOnSuccess();
+            	if(result.isSuccessful()) {
+                    cleanupOnSuccess();
+            	} else {
+            		cleanup();
+            	}
             }
 
             @Override
