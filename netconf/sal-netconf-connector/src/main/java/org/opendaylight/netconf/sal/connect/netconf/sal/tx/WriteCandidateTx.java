@@ -15,7 +15,9 @@ import com.google.common.util.concurrent.CheckedFuture;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
+
 import javax.annotation.Nullable;
+
 import org.opendaylight.controller.md.sal.common.api.TransactionStatus;
 import org.opendaylight.controller.md.sal.common.api.data.TransactionCommitFailedException;
 import org.opendaylight.controller.md.sal.dom.api.DOMRpcResult;
@@ -94,34 +96,8 @@ public class WriteCandidateTx extends AbstractWriteTx {
 
     @Override
     public synchronized CheckedFuture<Void, TransactionCommitFailedException> submit() {
-        final ListenableFuture<Void> commitFutureAsVoid = Futures.transform(commit(), new Function<RpcResult<TransactionStatus>, Void>() {
-            @Override
-            public Void apply(final RpcResult<TransactionStatus> input) {
-                Preconditions.checkArgument(input.isSuccessful() && input.getErrors().isEmpty(), "Submit failed with errors: %s", input.getErrors());
-                return null;
-            }
-        });
-
-        return Futures.makeChecked(commitFutureAsVoid, new Function<Exception, TransactionCommitFailedException>() {
-            @Override
-            public TransactionCommitFailedException apply(final Exception input) {
-                return new TransactionCommitFailedException("Submit of transaction " + getIdentifier() + " failed", input);
-            }
-        });
-    }
-
-    /**
-     * This has to be non blocking since it is called from a callback on commit and its netty threadpool that is really sensitive to blocking calls
-     */
-    private void discardChanges() {
-        netOps.discardChanges(new NetconfRpcFutureCallback("Discarding candidate", id));
-    }
-
-    @Override
-    public synchronized ListenableFuture<RpcResult<TransactionStatus>> performCommit() {
-        resultsFutures.add(netOps.commit(new NetconfRpcFutureCallback("Commit", id)));
-        final ListenableFuture<RpcResult<TransactionStatus>> txResult = resultsToTxStatus();
-
+    	ListenableFuture<RpcResult<TransactionStatus>> txResult = commit();
+    	
         Futures.addCallback(txResult, new FutureCallback<RpcResult<TransactionStatus>>() {
             @Override
             public void onSuccess(@Nullable final RpcResult<TransactionStatus> result) {
@@ -139,7 +115,40 @@ public class WriteCandidateTx extends AbstractWriteTx {
                 cleanup();
             }
         });
+    	
+    	
+        final ListenableFuture<Void> commitFutureAsVoid = Futures.transform(txResult, new Function<RpcResult<TransactionStatus>, Void>() {
+            @Override
+            public Void apply(final RpcResult<TransactionStatus> input) {
+                Preconditions.checkArgument(input.isSuccessful() && input.getErrors().isEmpty(), "Submit of transaction " + getIdentifier() + " failed with error: %s", input.getErrors());
+                return null;
+            }
+        });
 
+        return Futures.makeChecked(commitFutureAsVoid, new Function<Exception, TransactionCommitFailedException>() {
+            @Override
+            public TransactionCommitFailedException apply(final Exception input) {
+              if(input.getCause() instanceof IllegalArgumentException)
+              {
+                IllegalArgumentException exception = (IllegalArgumentException) input.getCause();
+                return new TransactionCommitFailedException(exception.getMessage(), input);
+              }
+                return new TransactionCommitFailedException("Submit of transaction " + getIdentifier() + " failed", input);
+            }
+        });
+    }
+
+    /**
+     * This has to be non blocking since it is called from a callback on commit and its netty threadpool that is really sensitive to blocking calls
+     */
+    private void discardChanges() {
+        netOps.discardChanges(new NetconfRpcFutureCallback("Discarding candidate", id));
+    }
+
+    @Override
+    public synchronized ListenableFuture<RpcResult<TransactionStatus>> performCommit() {
+        resultsFutures.add(netOps.commit(new NetconfRpcFutureCallback("Commit", id)));
+        final ListenableFuture<RpcResult<TransactionStatus>> txResult = resultsToTxStatus();
         return txResult;
     }
 
