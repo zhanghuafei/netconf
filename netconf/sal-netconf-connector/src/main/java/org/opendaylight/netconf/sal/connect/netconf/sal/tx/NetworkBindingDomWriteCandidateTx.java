@@ -5,8 +5,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 
 import org.opendaylight.controller.config.util.xml.DocumentedException;
-import org.opendaylight.controller.md.sal.binding.api.WriteTransaction;
-import org.opendaylight.controller.md.sal.binding.impl.BindingToNormalizedNodeCodec;
 import org.opendaylight.controller.md.sal.common.api.TransactionStatus;
 import org.opendaylight.controller.md.sal.common.api.data.LogicalDatastoreType;
 import org.opendaylight.controller.md.sal.common.api.data.TransactionCommitFailedException;
@@ -14,6 +12,7 @@ import org.opendaylight.controller.md.sal.dom.api.DOMDataBroker;
 import org.opendaylight.controller.md.sal.dom.api.DOMDataWriteTransaction;
 import org.opendaylight.controller.md.sal.dom.api.DOMMountPoint;
 import org.opendaylight.controller.md.sal.dom.api.DOMMountPointService;
+import org.opendaylight.mdsal.binding.dom.codec.api.BindingNormalizedNodeSerializer;
 import org.opendaylight.netconf.api.NetconfDocumentedException;
 import org.opendaylight.yangtools.yang.binding.DataObject;
 import org.opendaylight.yangtools.yang.binding.InstanceIdentifier;
@@ -33,13 +32,13 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 
-public class NetBindingDomWriteCandidateTx implements NetWriteTransaction{ 
+public class NetworkBindingDomWriteCandidateTx implements NetworkWriteTransaction{ 
   
-  private BindingToNormalizedNodeCodec codec;
+  private BindingNormalizedNodeSerializer codec;
   private DOMMountPointService mountService;
   private Map<YangInstanceIdentifier, DOMDataWriteTransaction> mountPointPathToTx = Maps.newHashMap();
   
-  public  NetBindingDomWriteCandidateTx(BindingToNormalizedNodeCodec codec, DOMMountPointService mountService) {
+  public  NetworkBindingDomWriteCandidateTx(BindingNormalizedNodeSerializer codec, DOMMountPointService mountService) {
     this.codec = codec;
     this.mountService = mountService;
   }
@@ -125,7 +124,7 @@ public class NetBindingDomWriteCandidateTx implements NetWriteTransaction{
 
       @Override
       public void onSuccess(RpcResult<TransactionStatus> result) {
-        if(!result.isSuccessful()) {
+        if(result.isSuccessful()) {
           cleanupOnSuccess();
         }
         cleanup();
