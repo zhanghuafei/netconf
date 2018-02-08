@@ -7,7 +7,6 @@
  */
 package org.opendaylight.restconf.common.schema;
 
-import org.opendaylight.mdsal.dom.api.DOMYangTextSourceProvider;
 import org.opendaylight.yangtools.yang.model.api.Module;
 import org.opendaylight.yangtools.yang.model.api.SchemaContext;
 
@@ -15,13 +14,10 @@ public class SchemaExportContext {
 
     private final SchemaContext schemaContext;
     private final Module module;
-    private final DOMYangTextSourceProvider sourceProvider;
 
-    public SchemaExportContext(final SchemaContext ctx, final Module module,
-                               final DOMYangTextSourceProvider sourceProvider) {
+    public SchemaExportContext(final SchemaContext ctx, final Module module) {
         schemaContext = ctx;
         this.module = module;
-        this.sourceProvider = sourceProvider;
     }
 
     public SchemaContext getSchemaContext() {
@@ -32,7 +28,4 @@ public class SchemaExportContext {
         return module;
     }
 
-    public DOMYangTextSourceProvider getSourceProvider() {
-        return sourceProvider;
-    }
 }

@@ -32,7 +32,7 @@ import org.opendaylight.yangtools.yang.data.api.YangInstanceIdentifier.InstanceI
 import org.opendaylight.yangtools.yang.data.codec.xml.XmlCodecFactory;
 import org.opendaylight.yangtools.yang.data.impl.codec.TypeDefinitionAwareCodec;
 import org.opendaylight.yangtools.yang.data.util.codec.TypeAwareCodec;
-import org.opendaylight.yangtools.yang.model.api.CaseSchemaNode;
+import org.opendaylight.yangtools.yang.model.api.ChoiceCaseNode;
 import org.opendaylight.yangtools.yang.model.api.DataSchemaNode;
 import org.opendaylight.yangtools.yang.model.api.LeafSchemaNode;
 import org.opendaylight.yangtools.yang.model.api.ListSchemaNode;
@@ -65,16 +65,16 @@ public class FilterContentValidator {
     public YangInstanceIdentifier validate(final XmlElement filterContent) throws DocumentedException {
         try {
             final URI namespace = new URI(filterContent.getNamespace());
-            final Module module = schemaContext.getCurrentContext().findModules(namespace).iterator().next();
+            final Module module = schemaContext.getCurrentContext().findModuleByNamespaceAndRevision(namespace, null);
             final DataSchemaNode schema = getRootDataSchemaNode(module, namespace, filterContent.getName());
             final FilterTree filterTree = validateNode(
                     filterContent, schema, new FilterTree(schema.getQName(), Type.OTHER, schema));
             return getFilterDataRoot(filterTree, filterContent, YangInstanceIdentifier.builder());
         } catch (final URISyntaxException e) {
-            throw new RuntimeException("Wrong namespace in element + " + filterContent.toString(), e);
+            throw new RuntimeException("Wrong namespace in element + " + filterContent.toString());
         } catch (final ValidationException e) {
             LOG.debug("Filter content isn't valid", e);
-            throw new DocumentedException("Validation failed. Cause: " + e.getMessage(), e,
+            throw new DocumentedException("Validation failed. Cause: " + e.getMessage(),
                     DocumentedException.ErrorType.APPLICATION,
                     DocumentedException.ErrorTag.UNKNOWN_NAMESPACE,
                     DocumentedException.ErrorSeverity.ERROR);
@@ -132,7 +132,7 @@ public class FilterContentValidator {
                 final DataSchemaNode childSchema = path.getLast();
                 validateNode(childElement, childSchema, subtree);
             } catch (URISyntaxException | MissingNameSpaceException e) {
-                throw new RuntimeException("Wrong namespace in element + " + childElement.toString(), e);
+                throw new RuntimeException("Wrong namespace in element + " + childElement.toString());
             }
         }
         return tree;
@@ -249,20 +249,20 @@ public class FilterContentValidator {
         }
 
         FilterTree addChild(final DataSchemaNode data) {
-            final Type childType;
-            if (data instanceof CaseSchemaNode) {
-                childType = Type.CHOICE_CASE;
+            final Type type;
+            if (data instanceof ChoiceCaseNode) {
+                type = Type.CHOICE_CASE;
             } else if (data instanceof ListSchemaNode) {
-                childType = Type.LIST;
+                type = Type.LIST;
             } else {
-                childType = Type.OTHER;
+                type = Type.OTHER;
             }
-            final QName childName = data.getQName();
-            FilterTree childTree = children.get(childName);
+            final QName name = data.getQName();
+            FilterTree childTree = children.get(name);
             if (childTree == null) {
-                childTree = new FilterTree(childName, childType, data);
+                childTree = new FilterTree(name, type, data);
             }
-            children.put(childName, childTree);
+            children.put(name, childTree);
             return childTree;
         }
 

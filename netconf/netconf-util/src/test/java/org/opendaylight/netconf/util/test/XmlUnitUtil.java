@@ -22,7 +22,7 @@ import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.Text;
 
-public final class XmlUnitUtil {
+public class XmlUnitUtil {
 
     private XmlUnitUtil() {}
 

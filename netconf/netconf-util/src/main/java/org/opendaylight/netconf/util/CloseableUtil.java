@@ -5,12 +5,10 @@
  * terms of the Eclipse Public License v1.0 which accompanies this distribution,
  * and is available at http://www.eclipse.org/legal/epl-v10.html
  */
+
 package org.opendaylight.netconf.util;
 
-public final class CloseableUtil {
-    private CloseableUtil() {
-
-    }
+public class CloseableUtil {
 
     @SuppressWarnings("checkstyle:IllegalCatch")
     public static void closeAll(Iterable<? extends AutoCloseable> autoCloseables) throws Exception {

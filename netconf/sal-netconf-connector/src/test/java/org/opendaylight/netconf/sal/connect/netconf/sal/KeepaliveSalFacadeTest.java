@@ -105,6 +105,10 @@ public class KeepaliveSalFacadeTest {
         doReturn(Futures.immediateCheckedFuture(result))
                 .when(deviceRpc).invokeRpc(any(SchemaPath.class), any(NormalizedNode.class));
 
+        final KeepaliveSalFacade keepaliveSalFacade =
+                new KeepaliveSalFacade(REMOTE_DEVICE_ID, underlyingSalFacade, executorServiceSpy, 1L, 1L);
+        keepaliveSalFacade.setListener(listener);
+
         keepaliveSalFacade.onDeviceConnected(null, null, deviceRpc);
 
         verify(underlyingSalFacade).onDeviceConnected(
@@ -118,6 +122,10 @@ public class KeepaliveSalFacadeTest {
 
         doReturn(Futures.immediateFailedCheckedFuture(new IllegalStateException("illegal-state")))
                 .when(deviceRpc).invokeRpc(any(SchemaPath.class), any(NormalizedNode.class));
+
+        final KeepaliveSalFacade keepaliveSalFacade =
+                new KeepaliveSalFacade(REMOTE_DEVICE_ID, underlyingSalFacade, executorServiceSpy, 1L, 1L);
+        keepaliveSalFacade.setListener(listener);
 
         keepaliveSalFacade.onDeviceConnected(null, null, deviceRpc);
 
@@ -159,7 +167,7 @@ public class KeepaliveSalFacadeTest {
         doReturn(Futures.immediateFailedCheckedFuture(new IllegalStateException("illegal-state")))
                 .when(deviceRpc).invokeRpc(any(SchemaPath.class), any(NormalizedNode.class));
 
-        keepaliveSalFacade =
+        final KeepaliveSalFacade keepaliveSalFacade =
                 new KeepaliveSalFacade(REMOTE_DEVICE_ID, underlyingSalFacade, executorServiceSpy, 100L, 1L);
         keepaliveSalFacade.setListener(listener);
 

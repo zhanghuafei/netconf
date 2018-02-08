@@ -46,7 +46,7 @@ public class SettableOperationProvider implements NetconfOperationServiceFactory
 
         private final SettableRpc rpc;
 
-        SettableOperationService(final File rpcConfig) {
+        private SettableOperationService(final File rpcConfig) {
             this.rpc = new SettableRpc(rpcConfig);
         }
 

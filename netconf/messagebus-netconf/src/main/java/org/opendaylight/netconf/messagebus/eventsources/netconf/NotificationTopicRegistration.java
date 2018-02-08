@@ -37,8 +37,8 @@ abstract class NotificationTopicRegistration implements AutoCloseable {
     private Date lastEventTime;
     protected final ConcurrentHashMap<SchemaPath, Set<TopicId>> notificationTopicMap = new ConcurrentHashMap<>();
 
-    protected NotificationTopicRegistration(final NotificationSourceType notificationSourceType,
-            final String sourceName, final String notificationUrnPrefix) {
+    protected NotificationTopicRegistration(NotificationSourceType notificationSourceType, String sourceName,
+                                            String notificationUrnPrefix) {
         this.notificationSourceType = notificationSourceType;
         this.sourceName = sourceName;
         this.notificationUrnPrefix = notificationUrnPrefix;
@@ -50,7 +50,7 @@ abstract class NotificationTopicRegistration implements AutoCloseable {
         return active;
     }
 
-    protected void setActive(final boolean active) {
+    protected void setActive(boolean active) {
         this.active = active;
     }
 
@@ -72,7 +72,7 @@ abstract class NotificationTopicRegistration implements AutoCloseable {
      * @param notificationPath path
      * @return topicIds
      */
-    Set<TopicId> getTopicsForNotification(final SchemaPath notificationPath) {
+    Set<TopicId> getTopicsForNotification(SchemaPath notificationPath) {
         final Set<TopicId> topicIds = notificationTopicMap.get(notificationPath);
         return topicIds != null ? topicIds : Sets.newHashSet();
     }
@@ -83,7 +83,7 @@ abstract class NotificationTopicRegistration implements AutoCloseable {
      * @param notificationPath path
      * @return true, if notification belongs to registration namespace
      */
-    boolean checkNotificationPath(final SchemaPath notificationPath) {
+    boolean checkNotificationPath(SchemaPath notificationPath) {
         if (notificationPath == null) {
             return false;
         }
@@ -97,7 +97,7 @@ abstract class NotificationTopicRegistration implements AutoCloseable {
         return Optional.fromNullable(lastEventTime);
     }
 
-    void setLastEventTime(final Date lastEventTime) {
+    void setLastEventTime(Date lastEventTime) {
         this.lastEventTime = lastEventTime;
     }
 
@@ -120,6 +120,7 @@ abstract class NotificationTopicRegistration implements AutoCloseable {
      * Registers associated event source notification to topic.
      *
      * @param topicId topic id
+     * @return true, if successful
      */
     abstract void unRegisterNotificationTopic(TopicId topicId);
 
@@ -127,7 +128,7 @@ abstract class NotificationTopicRegistration implements AutoCloseable {
         return replaySupported;
     }
 
-    protected void setReplaySupported(final boolean replaySupported) {
+    protected void setReplaySupported(boolean replaySupported) {
         this.replaySupported = replaySupported;
     }
 

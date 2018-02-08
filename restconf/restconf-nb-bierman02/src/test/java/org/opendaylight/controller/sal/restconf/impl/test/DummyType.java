@@ -8,7 +8,6 @@
 package org.opendaylight.controller.sal.restconf.impl.test;
 
 import java.util.List;
-import java.util.Optional;
 import org.opendaylight.yangtools.yang.common.QName;
 import org.opendaylight.yangtools.yang.model.api.SchemaPath;
 import org.opendaylight.yangtools.yang.model.api.Status;
@@ -30,13 +29,15 @@ public class DummyType implements TypeDefinition<DummyType> {
     }
 
     @Override
-    public Optional<String> getDescription() {
-        return Optional.empty();
+    public String getDescription() {
+        // TODO Auto-generated method stub
+        return null;
     }
 
     @Override
-    public Optional<String> getReference() {
-        return Optional.empty();
+    public String getReference() {
+        // TODO Auto-generated method stub
+        return null;
     }
 
     @Override
@@ -58,12 +59,15 @@ public class DummyType implements TypeDefinition<DummyType> {
     }
 
     @Override
-    public Optional<String> getUnits() {
-        return Optional.empty();
+    public String getUnits() {
+        // TODO Auto-generated method stub
+        return null;
     }
 
     @Override
-    public Optional<? extends Object> getDefaultValue() {
-        return Optional.empty();
+    public Object getDefaultValue() {
+        // TODO Auto-generated method stub
+        return null;
     }
+
 }

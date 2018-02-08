@@ -50,10 +50,10 @@ final class NotificationHandler {
 
     /**
      * Forward all cached notifications and pass all notifications from this point directly to sal facade.
-     * @param transformer Message transformer
+     * @param messageTransformer Message transformer
      */
-    synchronized void onRemoteSchemaUp(final MessageTransformer<NetconfMessage> transformer) {
-        this.messageTransformer = Preconditions.checkNotNull(transformer);
+    synchronized void onRemoteSchemaUp(final MessageTransformer<NetconfMessage> messageTransformer) {
+        this.messageTransformer = Preconditions.checkNotNull(messageTransformer);
 
         passNotifications = true;
 
@@ -90,8 +90,8 @@ final class NotificationHandler {
         }
     }
 
-    synchronized void addNotificationFilter(final NotificationFilter newFilter) {
-        this.filter = newFilter;
+    synchronized void addNotificationFilter(final NotificationFilter filter) {
+        this.filter = filter;
     }
 
     synchronized void onRemoteSchemaDown() {

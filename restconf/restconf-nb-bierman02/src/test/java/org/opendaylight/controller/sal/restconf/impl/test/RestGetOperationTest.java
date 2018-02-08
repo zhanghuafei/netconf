@@ -24,6 +24,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -55,7 +56,7 @@ import org.opendaylight.netconf.sal.restconf.impl.ControllerContext;
 import org.opendaylight.netconf.sal.restconf.impl.RestconfImpl;
 import org.opendaylight.restconf.common.errors.RestconfDocumentedException;
 import org.opendaylight.yangtools.yang.common.QName;
-import org.opendaylight.yangtools.yang.common.Revision;
+import org.opendaylight.yangtools.yang.common.SimpleDateFormatUtil;
 import org.opendaylight.yangtools.yang.data.api.YangInstanceIdentifier;
 import org.opendaylight.yangtools.yang.data.api.YangInstanceIdentifier.NodeIdentifier;
 import org.opendaylight.yangtools.yang.data.api.YangInstanceIdentifier.NodeIdentifierWithPredicates;
@@ -223,7 +224,9 @@ public class RestGetOperationTest extends JerseyTest {
     }
 
     private static QName newTestModuleQName(final String localPart) throws Exception {
-        return QName.create(URI.create("test:module"), Revision.of("2014-01-09"), localPart);
+        final Date revision = SimpleDateFormatUtil.getRevisionFormat().parse("2014-01-09");
+        final URI uri = URI.create("test:module");
+        return QName.create(uri, revision, localPart);
     }
 
     @Test
@@ -322,7 +325,7 @@ public class RestGetOperationTest extends JerseyTest {
 
         assertEquals("module2", qname.getLocalName());
         assertEquals("module:2", qname.getNamespace().toString());
-        assertEquals("2014-01-02", qname.getRevision().get().toString());
+        assertEquals("2014-01-02", qname.getFormattedRevision());
 
         response = target(uri).request("application/yang.api+json").get();
         assertEquals(200, response.getStatus());
@@ -510,7 +513,7 @@ public class RestGetOperationTest extends JerseyTest {
         final QName module = assertedModuleXmlToModuleQName(responseXml.getDocumentElement());
 
         assertEquals("module1-behind-mount-point", module.getLocalName());
-        assertEquals("2014-02-03", module.getRevision().get().toString());
+        assertEquals("2014-02-03", module.getFormattedRevision());
         assertEquals("module:1:behind:mount:point", module.getNamespace().toString());
 
 
@@ -740,7 +743,7 @@ public class RestGetOperationTest extends JerseyTest {
             final QName qNameDepth1Cont = QName.create("urn:nested:module", "2014-06-3", "depth1-cont");
             final YangInstanceIdentifier ii = YangInstanceIdentifier.builder().node(qNameDepth1Cont).build();
             final NormalizedNode value =
-                    Builders.containerBuilder().withNodeIdentifier(new NodeIdentifier(qNameDepth1Cont)).build();
+                    (Builders.containerBuilder().withNodeIdentifier(new NodeIdentifier(qNameDepth1Cont)).build());
             when(brokerFacade.readConfigurationData(eq(ii))).thenReturn(value);
             restconfImpl.readConfigurationData("nested-module:depth1-cont", uriInfo);
             fail("Expected RestconfDocumentedException");
@@ -787,7 +790,7 @@ public class RestGetOperationTest extends JerseyTest {
                     "Unexpected child element for parent \"" + element.getLocalName() + "\": "
                             + actualElement.getLocalName(), expChild);
 
-            if (expChild.data == null || expChild.data instanceof List) {
+            if ((expChild.data == null) || (expChild.data instanceof List)) {
                 verifyContainerElement(actualElement, expChild);
             } else {
                 assertEquals("Text content for element: " + actualElement.getLocalName(), expChild.data,

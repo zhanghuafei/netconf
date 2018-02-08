@@ -11,9 +11,6 @@ package org.opendaylight.netconf.test.tool;
 import java.io.InputStream;
 
 public final class TestToolUtils {
-    private TestToolUtils() {
-
-    }
 
     public static String getMac(long mac) {
         final StringBuilder builder = new StringBuilder(Long.toString(mac, 16));

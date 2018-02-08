@@ -33,14 +33,19 @@ import com.google.common.collect.BiMap;
 import com.google.common.collect.HashBiMap;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import io.netty.channel.Channel;
 import java.io.IOException;
+import java.io.InputStream;
 import java.math.BigInteger;
 import java.net.URISyntaxException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
@@ -112,7 +117,9 @@ import org.opendaylight.netconf.util.test.XmlFileLoader;
 import org.opendaylight.yang.gen.v1.urn.opendaylight.params.xml.ns.yang.controller.config.test.types.rev131127.TestIdentity1;
 import org.opendaylight.yang.gen.v1.urn.opendaylight.params.xml.ns.yang.controller.config.test.types.rev131127.TestIdentity2;
 import org.opendaylight.yangtools.yang.model.api.SchemaContext;
+import org.opendaylight.yangtools.yang.model.api.SchemaContextProvider;
 import org.opendaylight.yangtools.yang.model.repo.spi.SchemaSourceProvider;
+import org.opendaylight.yangtools.yang.parser.spi.meta.ReactorException;
 import org.opendaylight.yangtools.yang.test.util.YangParserTestUtils;
 import org.osgi.framework.Filter;
 import org.osgi.framework.ServiceListener;
@@ -253,7 +260,12 @@ public class NetconfMappingTest extends AbstractConfigTest {
         final BindingRuntimeContext ret = super.getBindingRuntimeContext();
         doReturn(TestIdentity1.class).when(ret).getIdentityClass(TestIdentity1.QNAME);
         doReturn(TestIdentity2.class).when(ret).getIdentityClass(TestIdentity2.QNAME);
-        doReturn(getSchemaContext()).when(ret).getSchemaContext();
+        final List<InputStream> streams = getYangs();
+        try {
+            doReturn(YangParserTestUtils.parseYangStreams(streams)).when(ret).getSchemaContext();
+        } catch (final ReactorException e) {
+            throw new RuntimeException("Unable to build schema context from " + streams, e);
+        }
         return ret;
     }
 
@@ -742,16 +754,22 @@ public class NetconfMappingTest extends AbstractConfigTest {
         }
     }
 
-    private static Map<String, Map<String, ModuleMXBeanEntry>> getMbes() {
+    private Map<String, Map<String, ModuleMXBeanEntry>> getMbes() throws Exception {
+        final List<InputStream> yangDependencies = getYangs();
 
-        final SchemaContext schemaContext = getSchemaContext();
-        final YangStoreService yangStoreService = new YangStoreService(() -> schemaContext,
-            mock(SchemaSourceProvider.class));
+        final Map<String, Map<String, ModuleMXBeanEntry>> mBeanEntries = Maps.newHashMap();
+
+        final SchemaContext schemaContext = YangParserTestUtils.parseYangStreams(yangDependencies);
+        final YangStoreService yangStoreService = new YangStoreService(new SchemaContextProvider() {
+            @Override
+            public SchemaContext getSchemaContext() {
+                return schemaContext;
+            }
+        }, mock(SchemaSourceProvider.class));
         final BindingRuntimeContext bindingRuntimeContext = mock(BindingRuntimeContext.class);
         doReturn(schemaContext).when(bindingRuntimeContext).getSchemaContext();
         doReturn(getEnumMapping()).when(bindingRuntimeContext).getEnumMapping(any(Class.class));
         yangStoreService.refresh(bindingRuntimeContext);
-        final Map<String, Map<String, ModuleMXBeanEntry>> mBeanEntries = new HashMap<>();
         mBeanEntries.putAll(yangStoreService.getModuleMXBeanEntryMap());
 
         return mBeanEntries;
@@ -767,8 +785,9 @@ public class NetconfMappingTest extends AbstractConfigTest {
         return enumBiMap;
     }
 
-    private static Set<org.opendaylight.yangtools.yang.model.api.Module> getModules() {
-        return getSchemaContext().getModules();
+    private Set<org.opendaylight.yangtools.yang.model.api.Module> getModules() throws Exception {
+        final SchemaContext resolveSchemaContext = YangParserTestUtils.parseYangStreams(getYangs());
+        return resolveSchemaContext.getModules();
     }
 
     @Test
@@ -846,12 +865,19 @@ public class NetconfMappingTest extends AbstractConfigTest {
         return response;
     }
 
-    private static SchemaContext getSchemaContext() {
-        return YangParserTestUtils.parseYangResources(NetconfMappingTest.class,
-            "/META-INF/yang/config@2013-04-05.yang", "/META-INF/yang/rpc-context@2013-06-17.yang",
-            "/META-INF/yang/config-test@2013-06-13.yang", "/META-INF/yang/config-test-impl@2013-04-03.yang",
-            "/META-INF/yang/test-types@2013-11-27.yang", "/META-INF/yang/test-groups@2014-12-08.yang",
-            "/META-INF/yang/ietf-inet-types@2013-07-15.yang");
+    private List<InputStream> getYangs() {
+        final List<String> paths = Arrays.asList("/META-INF/yang/config@2013-04-05.yang",
+                "/META-INF/yang/rpc-context@2013-06-17.yang",
+                "/META-INF/yang/config-test.yang", "/META-INF/yang/config-test-impl.yang",
+                "/META-INF/yang/test-types.yang", "/META-INF/yang/test-groups.yang",
+                "/META-INF/yang/ietf-inet-types@2013-07-15.yang");
+        final Collection<InputStream> yangDependencies = new ArrayList<>();
+        for (final String path : paths) {
+            final InputStream is = Preconditions
+                    .checkNotNull(getClass().getResourceAsStream(path), path + " not found");
+            yangDependencies.add(is);
+        }
+        return Lists.newArrayList(yangDependencies);
     }
 
     private void setModule(final NetconfTestImplModuleMXBean mxBean, final ConfigTransactionJMXClient transaction,

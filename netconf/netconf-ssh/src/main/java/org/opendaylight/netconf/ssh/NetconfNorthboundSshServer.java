@@ -15,7 +15,7 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.concurrent.Executors;
-import org.apache.sshd.server.keyprovider.SimpleGeneratorHostKeyProvider;
+import org.apache.sshd.server.keyprovider.PEMGeneratorHostKeyProvider;
 import org.opendaylight.netconf.api.NetconfServerDispatcher;
 import org.opendaylight.netconf.auth.AuthProvider;
 import org.opendaylight.yang.gen.v1.urn.ietf.params.xml.ns.yang.ietf.inet.types.rev130715.IetfInetUtil;
@@ -55,7 +55,8 @@ public class NetconfNorthboundSshServer {
         sshProxyServerConfigurationBuilder.setLocalAddress(localAddress);
         sshProxyServerConfigurationBuilder.setAuthenticator(authProvider);
         sshProxyServerConfigurationBuilder.setIdleTimeout(Integer.MAX_VALUE);
-        sshProxyServerConfigurationBuilder.setKeyPairProvider(new SimpleGeneratorHostKeyProvider());
+        sshProxyServerConfigurationBuilder.setKeyPairProvider(new PEMGeneratorHostKeyProvider(DEFAULT_PRIVATE_KEY_PATH,
+                DEFAULT_ALGORITHM, DEFAULT_KEY_SIZE));
 
         localServer.addListener(future -> {
             if (future.isDone() && !future.isCancelled()) {
@@ -78,7 +79,7 @@ public class NetconfNorthboundSshServer {
         return new InetSocketAddress(inetAd, Integer.parseInt(portNumber));
     }
 
-    public void close() throws IOException {
+    public void close() {
         sshProxyServer.close();
 
         if (localServer.isDone()) {

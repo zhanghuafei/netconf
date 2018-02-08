@@ -10,12 +10,10 @@ package org.opendaylight.restconf.nb.rfc8040.references;
 import java.lang.ref.SoftReference;
 import java.net.URI;
 import java.util.Date;
-import java.util.Optional;
 import java.util.Set;
 import org.opendaylight.controller.md.sal.dom.api.DOMMountPoint;
 import org.opendaylight.restconf.nb.rfc8040.Rfc8040;
 import org.opendaylight.yangtools.yang.common.QName;
-import org.opendaylight.yangtools.yang.common.Revision;
 import org.opendaylight.yangtools.yang.model.api.Module;
 import org.opendaylight.yangtools.yang.model.api.SchemaContext;
 
@@ -37,7 +35,7 @@ public final class SchemaContextRef {
      *             actual {@link SchemaContext}
      */
     public SchemaContextRef(final SchemaContext schemaContext) {
-        this.schemaContextRef = new SoftReference<>(schemaContext);
+        this.schemaContextRef = new SoftReference<SchemaContext>(schemaContext);
     }
 
     /**
@@ -94,9 +92,10 @@ public final class SchemaContextRef {
      *             revision of module
      * @return {@link Module}
      */
-    public Module findModuleByNamespaceAndRevision(final URI namespace, final Optional<Revision> revision) {
-        return this.get().findModule(namespace, revision).orElse(null);
+    public Module findModuleByNamespaceAndRevision(final URI namespace, final Date revision) {
+        return this.get().findModuleByNamespaceAndRevision(namespace, revision);
     }
+
 
     /**
      * Find {@link Module} in {@link SchemaContext} of {@link DOMMountPoint} by
@@ -111,7 +110,7 @@ public final class SchemaContextRef {
     public Module findModuleInMountPointByQName(final DOMMountPoint mountPoint, final QName moduleQname) {
         final SchemaContext schemaContext = mountPoint == null ? null : mountPoint.getSchemaContext();
         return schemaContext == null ? null
-                : schemaContext.findModule(moduleQname.getLocalName(), moduleQname.getRevision()).orElse(null);
+                : schemaContext.findModuleByName(moduleQname.getLocalName(), moduleQname.getRevision());
     }
 
     /**
@@ -135,7 +134,7 @@ public final class SchemaContextRef {
      *             revision of module
      * @return {@link Module}
      */
-    public Module findModuleByNameAndRevision(final String localName, final Optional<Revision> revision) {
-        return this.get().findModule(localName, revision).orElse(null);
+    public Module findModuleByNameAndRevision(final String localName, final Date revision) {
+        return this.get().findModuleByName(localName, revision);
     }
 }

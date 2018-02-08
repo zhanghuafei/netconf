@@ -37,13 +37,13 @@ import io.netty.channel.DefaultChannelPromise;
 import io.netty.channel.EventLoop;
 import java.io.IOException;
 import java.net.SocketAddress;
-import org.apache.sshd.client.SshClient;
+import org.apache.sshd.ClientChannel;
+import org.apache.sshd.ClientSession;
+import org.apache.sshd.SshClient;
 import org.apache.sshd.client.channel.ChannelSubsystem;
-import org.apache.sshd.client.channel.ClientChannel;
 import org.apache.sshd.client.future.AuthFuture;
 import org.apache.sshd.client.future.ConnectFuture;
 import org.apache.sshd.client.future.OpenFuture;
-import org.apache.sshd.client.session.ClientSession;
 import org.apache.sshd.common.future.CloseFuture;
 import org.apache.sshd.common.future.SshFuture;
 import org.apache.sshd.common.future.SshFutureListener;
@@ -51,8 +51,7 @@ import org.apache.sshd.common.io.IoInputStream;
 import org.apache.sshd.common.io.IoOutputStream;
 import org.apache.sshd.common.io.IoReadFuture;
 import org.apache.sshd.common.io.IoWriteFuture;
-import org.apache.sshd.common.util.buffer.Buffer;
-import org.apache.sshd.common.util.buffer.ByteArrayBuffer;
+import org.apache.sshd.common.util.Buffer;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Ignore;
@@ -60,6 +59,8 @@ import org.junit.Test;
 import org.mockito.Matchers;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 import org.opendaylight.netconf.nettyutil.handler.ssh.authentication.AuthenticationHandler;
 
 public class AsyncSshHandlerTest {
@@ -128,9 +129,12 @@ public class AsyncSshHandlerTest {
     private static <T extends SshFuture<T>> ListenableFuture<SshFutureListener<T>> stubAddListener(final T future) {
         final SettableFuture<SshFutureListener<T>> listenerSettableFuture = SettableFuture.create();
 
-        doAnswer(invocation -> {
-            listenerSettableFuture.set((SshFutureListener<T>) invocation.getArguments()[0]);
-            return null;
+        doAnswer(new Answer<Object>() {
+            @Override
+            public Object answer(final InvocationOnMock invocation) throws Throwable {
+                listenerSettableFuture.set((SshFutureListener<T>) invocation.getArguments()[0]);
+                return null;
+            }
         }).when(future).addListener(any(SshFutureListener.class));
 
         return listenerSettableFuture;
@@ -158,7 +162,7 @@ public class AsyncSshHandlerTest {
         doReturn(Boolean.TRUE).when(eventLoop).inEventLoop();
     }
 
-    private void stubSshClient() throws IOException {
+    private void stubSshClient() {
         doNothing().when(sshClient).start();
         final ConnectFuture connectFuture = mock(ConnectFuture.class);
         Futures.addCallback(stubAddListener(connectFuture), new SuccessFutureListener<ConnectFuture>() {
@@ -515,7 +519,7 @@ public class AsyncSshHandlerTest {
         doReturn(null).when(ioReadFuture).getException();
         doReturn(ioReadFuture).when(ioReadFuture).removeListener(Matchers.<SshFutureListener<IoReadFuture>>any());
         doReturn(5).when(ioReadFuture).getRead();
-        doReturn(new ByteArrayBuffer(new byte[]{0, 1, 2, 3, 4})).when(ioReadFuture).getBuffer();
+        doReturn(new Buffer(new byte[]{0, 1, 2, 3, 4})).when(ioReadFuture).getBuffer();
         doReturn(ioReadFuture).when(ioReadFuture).addListener(Matchers.<SshFutureListener<IoReadFuture>>any());
 
         // Always success for read

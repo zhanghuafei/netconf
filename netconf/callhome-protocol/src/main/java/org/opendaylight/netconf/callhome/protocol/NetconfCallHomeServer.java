@@ -13,20 +13,20 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.security.PublicKey;
-import org.apache.sshd.client.SshClient;
+import org.apache.sshd.ClientSession;
+import org.apache.sshd.SshClient;
+import org.apache.sshd.client.ServerKeyVerifier;
+import org.apache.sshd.client.SessionFactory;
 import org.apache.sshd.client.future.AuthFuture;
-import org.apache.sshd.client.keyverifier.ServerKeyVerifier;
-import org.apache.sshd.client.session.ClientSession;
 import org.apache.sshd.client.session.ClientSessionImpl;
-import org.apache.sshd.client.session.SessionFactory;
+import org.apache.sshd.common.KeyExchange;
+import org.apache.sshd.common.Session;
+import org.apache.sshd.common.SessionListener;
 import org.apache.sshd.common.future.SshFutureListener;
 import org.apache.sshd.common.io.IoAcceptor;
 import org.apache.sshd.common.io.IoServiceFactory;
 import org.apache.sshd.common.io.mina.MinaServiceFactory;
 import org.apache.sshd.common.io.nio2.Nio2ServiceFactory;
-import org.apache.sshd.common.kex.KeyExchange;
-import org.apache.sshd.common.session.Session;
-import org.apache.sshd.common.session.SessionListener;
 import org.opendaylight.netconf.callhome.protocol.CallHomeSessionContext.Factory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,8 +42,8 @@ public class NetconfCallHomeServer implements AutoCloseable, ServerKeyVerifier {
     private final InetSocketAddress bindAddress;
     private final StatusRecorder recorder;
 
-    NetconfCallHomeServer(final SshClient sshClient, final CallHomeAuthorizationProvider authProvider,
-            final Factory factory, final InetSocketAddress socketAddress, final StatusRecorder recorder) {
+    NetconfCallHomeServer(SshClient sshClient, CallHomeAuthorizationProvider authProvider, Factory factory,
+                          InetSocketAddress socketAddress, StatusRecorder recorder) {
         this.client = Preconditions.checkNotNull(sshClient);
         this.authProvider = Preconditions.checkNotNull(authProvider);
         this.sessionFactory = Preconditions.checkNotNull(factory);
@@ -51,28 +51,32 @@ public class NetconfCallHomeServer implements AutoCloseable, ServerKeyVerifier {
         this.recorder = recorder;
 
         sshClient.setServerKeyVerifier(this);
-        sshClient.addSessionListener(createSessionListener());
 
-        this.acceptor = createServiceFactory(sshClient).createAcceptor(new SessionFactory(sshClient));
+        SessionFactory clientSessions = new SessionFactory();
+        clientSessions.setClient(sshClient);
+        clientSessions.addListener(createSessionListener());
+
+        IoServiceFactory minaFactory = createServiceFactory(sshClient);
+        this.acceptor = minaFactory.createAcceptor(clientSessions);
     }
 
-    private IoServiceFactory createServiceFactory(final SshClient sshClient) {
+    private IoServiceFactory createServiceFactory(SshClient sshClient) {
         try {
             return createMinaServiceFactory(sshClient);
         } catch (NoClassDefFoundError e) {
             LOG.warn("Mina is not available, defaulting to NIO.");
-            return new Nio2ServiceFactory(sshClient, sshClient.getScheduledExecutorService(), false);
+            return new Nio2ServiceFactory(sshClient);
         }
     }
 
-    protected IoServiceFactory createMinaServiceFactory(final SshClient sshClient) {
-        return new MinaServiceFactory(sshClient, sshClient.getScheduledExecutorService(), false);
+    protected IoServiceFactory createMinaServiceFactory(SshClient sshClient) {
+        return new MinaServiceFactory(sshClient);
     }
 
     SessionListener createSessionListener() {
         return new SessionListener() {
             @Override
-            public void sessionEvent(final Session session, final Event event) {
+            public void sessionEvent(Session session, Event event) {
                 ClientSession clientSession = (ClientSession) session;
                 LOG.debug("SSH session {} event {}", session, event);
                 switch (event) {
@@ -88,12 +92,12 @@ public class NetconfCallHomeServer implements AutoCloseable, ServerKeyVerifier {
             }
 
             @Override
-            public void sessionCreated(final Session session) {
+            public void sessionCreated(Session session) {
                 LOG.debug("SSH session {} created", session);
             }
 
             @Override
-            public void sessionClosed(final Session session) {
+            public void sessionClosed(Session session) {
                 CallHomeSessionContext ctx = CallHomeSessionContext.getFrom((ClientSession) session);
                 if (ctx != null) {
                     ctx.removeSelf();
@@ -103,7 +107,7 @@ public class NetconfCallHomeServer implements AutoCloseable, ServerKeyVerifier {
         };
     }
 
-    private static void doPostAuth(final ClientSession session) {
+    private void doPostAuth(final ClientSession session) {
         CallHomeSessionContext.getFrom(session).openNetconfChannel();
     }
 
@@ -119,7 +123,7 @@ public class NetconfCallHomeServer implements AutoCloseable, ServerKeyVerifier {
     private SshFutureListener<AuthFuture> newAuthSshFutureListener(final ClientSession session) {
         return new SshFutureListener<AuthFuture>() {
             @Override
-            public void operationComplete(final AuthFuture authFuture) {
+            public void operationComplete(AuthFuture authFuture) {
                 if (authFuture.isSuccess()) {
                     onSuccess();
                 } else if (authFuture.isFailure()) {
@@ -134,7 +138,7 @@ public class NetconfCallHomeServer implements AutoCloseable, ServerKeyVerifier {
                 LOG.debug("Authorize success");
             }
 
-            private void onFailure(final Throwable throwable) {
+            private void onFailure(Throwable throwable) {
                 ClientSessionImpl impl = (ClientSessionImpl) session;
                 LOG.error("Authorize failed for session {}", session, throwable);
 
@@ -153,8 +157,7 @@ public class NetconfCallHomeServer implements AutoCloseable, ServerKeyVerifier {
     }
 
     @Override
-    public boolean verifyServerKey(final ClientSession sshClientSession, final SocketAddress remoteAddress,
-            final PublicKey serverKey) {
+    public boolean verifyServerKey(ClientSession sshClientSession, SocketAddress remoteAddress, PublicKey serverKey) {
         final CallHomeAuthorization authorization = authProvider.provideAuth(remoteAddress, serverKey);
         // server is not authorized
         if (!authorization.isServerAllowed()) {

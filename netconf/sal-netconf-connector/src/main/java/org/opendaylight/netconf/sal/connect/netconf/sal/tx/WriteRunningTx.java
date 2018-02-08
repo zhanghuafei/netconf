@@ -13,7 +13,6 @@ import com.google.common.base.Optional;
 import com.google.common.util.concurrent.CheckedFuture;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.MoreExecutors;
 import java.util.ArrayList;
 import java.util.List;
 import org.opendaylight.controller.md.sal.common.api.TransactionStatus;
@@ -74,7 +73,7 @@ public class WriteRunningTx extends AbstractWriteTx {
     @Override
     public synchronized CheckedFuture<Void, TransactionCommitFailedException> submit() {
         final ListenableFuture<Void> commmitFutureAsVoid = Futures.transform(commit(),
-                (Function<RpcResult<TransactionStatus>, Void>) input -> null, MoreExecutors.directExecutor());
+                (Function<RpcResult<TransactionStatus>, Void>) input -> null);
 
         return Futures.makeChecked(commmitFutureAsVoid,
             input -> new TransactionCommitFailedException("Submit of transaction " + getIdentifier() + " failed",
@@ -103,12 +102,12 @@ public class WriteRunningTx extends AbstractWriteTx {
         netOps.unlockRunning(new NetconfRpcFutureCallback("Unlock running", id));
     }
 
-    private static final class Change {
+    private static class Change {
 
         private final DataContainerChild<?, ?> editStructure;
         private final Optional<ModifyAction> defaultOperation;
 
-        Change(final DataContainerChild<?, ?> editStructure, final Optional<ModifyAction> defaultOperation) {
+        private Change(final DataContainerChild<?, ?> editStructure, final Optional<ModifyAction> defaultOperation) {
             this.editStructure = editStructure;
             this.defaultOperation = defaultOperation;
         }

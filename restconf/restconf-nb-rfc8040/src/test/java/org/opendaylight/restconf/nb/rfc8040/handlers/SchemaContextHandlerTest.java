@@ -47,7 +47,7 @@ public class SchemaContextHandlerTest {
         this.schemaContextHandler = new SchemaContextHandler(txHandler);
 
         this.schemaContext =
-                YangParserTestUtils.parseYangFiles(TestRestconfUtils.loadFiles(PATH_FOR_ACTUAL_SCHEMA_CONTEXT));
+                YangParserTestUtils.parseYangSources(TestRestconfUtils.loadFiles(PATH_FOR_ACTUAL_SCHEMA_CONTEXT));
         this.schemaContextHandler.onGlobalContextUpdated(this.schemaContext);
     }
 
@@ -83,7 +83,7 @@ public class SchemaContextHandlerTest {
     public void onGlobalContextUpdateTest() throws Exception {
         // create new SchemaContext and update SchemaContextHandler
         final SchemaContext newSchemaContext =
-                YangParserTestUtils.parseYangFiles(TestRestconfUtils.loadFiles(PATH_FOR_NEW_SCHEMA_CONTEXT));
+                YangParserTestUtils.parseYangSources(TestRestconfUtils.loadFiles(PATH_FOR_NEW_SCHEMA_CONTEXT));
         this.schemaContextHandler.onGlobalContextUpdated(newSchemaContext);
 
         assertNotEquals("SchemaContextHandler should not has reference to old SchemaContext",

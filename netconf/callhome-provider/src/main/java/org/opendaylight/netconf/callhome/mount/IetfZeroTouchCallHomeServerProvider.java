@@ -62,8 +62,7 @@ public class IetfZeroTouchCallHomeServerProvider implements AutoCloseable, DataT
     private int port = 0; // 0 = use default in NetconfCallHomeBuilder
     private final CallhomeStatusReporter statusReporter;
 
-    public IetfZeroTouchCallHomeServerProvider(final DataBroker dataBroker,
-            final CallHomeMountDispatcher mountDispacher) {
+    public IetfZeroTouchCallHomeServerProvider(DataBroker dataBroker, CallHomeMountDispatcher mountDispacher) {
         this.dataBroker = dataBroker;
         this.mountDispacher = mountDispacher;
         this.authProvider = new CallHomeAuthProviderImpl(dataBroker);
@@ -83,7 +82,7 @@ public class IetfZeroTouchCallHomeServerProvider implements AutoCloseable, DataT
         }
     }
 
-    public void setPort(final String portStr) {
+    public void setPort(String portStr) {
         try {
             Configuration configuration = new Configuration();
             configuration.set(CALL_HOME_PORT_KEY, portStr);
@@ -113,7 +112,7 @@ public class IetfZeroTouchCallHomeServerProvider implements AutoCloseable, DataT
     }
 
     @VisibleForTesting
-    void assertValid(final Object obj, final String description) {
+    void assertValid(Object obj, String description) {
         if (obj == null) {
             throw new RuntimeException(
                     String.format("Failed to find %s in IetfZeroTouchCallHomeProvider.initialize()", description));
@@ -137,7 +136,7 @@ public class IetfZeroTouchCallHomeServerProvider implements AutoCloseable, DataT
     }
 
     @Override
-    public void onDataTreeChanged(@Nonnull final Collection<DataTreeModification<AllowedDevices>> changes) {
+    public void onDataTreeChanged(@Nonnull Collection<DataTreeModification<AllowedDevices>> changes) {
         // In case of any changes to the devices datatree, register the changed values with callhome server
         // As of now, no way to add a new callhome client key to the CallHomeAuthorization instance since
         // its created under CallHomeAuthorizationProvider.
@@ -170,7 +169,7 @@ public class IetfZeroTouchCallHomeServerProvider implements AutoCloseable, DataT
         }
     }
 
-    private void handleDeletedDevices(final Set<InstanceIdentifier<?>> deletedDevices) {
+    private void handleDeletedDevices(Set<InstanceIdentifier<?>> deletedDevices) {
         if (deletedDevices.isEmpty()) {
             return;
         }
@@ -189,8 +188,8 @@ public class IetfZeroTouchCallHomeServerProvider implements AutoCloseable, DataT
         }
     }
 
-    private static List<Device> getReadDevices(final ListenableFuture<Optional<AllowedDevices>> devicesFuture)
-            throws InterruptedException, ExecutionException {
+    private List<Device> getReadDevices(
+            ListenableFuture<Optional<AllowedDevices>> devicesFuture) throws InterruptedException, ExecutionException {
         Optional<AllowedDevices> opt = devicesFuture.get();
         return opt.isPresent() ? opt.get().getDevice() : Collections.emptyList();
     }

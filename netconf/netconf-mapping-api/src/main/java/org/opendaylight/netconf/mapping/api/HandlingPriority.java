@@ -54,25 +54,24 @@ public final class HandlingPriority implements Comparable<HandlingPriority> {
     }
 
     @Override
-    @SuppressWarnings("checkstyle:parameterName")
-    public int compareTo(HandlingPriority o) {
-        if (this == o) {
+    public int compareTo(HandlingPriority priority) {
+        if (this == priority) {
             return 0;
         }
         if (isCannotHandle()) {
             return -1;
         }
-        if (o.isCannotHandle()) {
+        if (priority.isCannotHandle()) {
             return 1;
         }
 
-        if (priority > o.priority) {
+        if (this.priority > priority.priority) {
             return 1;
         }
-        if (priority.equals(o.priority)) {
+        if (this.priority.equals(priority.priority)) {
             return 0;
         }
-        if (priority < o.priority) {
+        if (this.priority < priority.priority) {
             return -1;
         }
 

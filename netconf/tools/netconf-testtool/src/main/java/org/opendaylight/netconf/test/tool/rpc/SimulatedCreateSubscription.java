@@ -46,19 +46,19 @@ public class SimulatedCreateSubscription extends AbstractLastNetconfOperation im
     public SimulatedCreateSubscription(final String id, final Optional<File> notificationsFile) {
         super(id);
 
-        Optional<Notifications> notifs;
+        Optional<Notifications> notifications;
 
         if (notificationsFile.isPresent()) {
-            notifs = Optional.of(loadNotifications(notificationsFile.get()));
+            notifications = Optional.of(loadNotifications(notificationsFile.get()));
             scheduledExecutorService = Executors.newScheduledThreadPool(1);
         } else {
-            notifs = Optional.absent();
+            notifications = Optional.absent();
         }
 
-        if (notifs.isPresent()) {
+        if (notifications.isPresent()) {
             Map<Notification, NetconfMessage> preparedMessages = Maps.newHashMapWithExpectedSize(
-                notifs.get().getNotificationList().size());
-            for (final Notification notification : notifs.get().getNotificationList()) {
+                notifications.get().getNotificationList().size());
+            for (final Notification notification : notifications.get().getNotificationList()) {
                 final NetconfMessage parsedNotification = parseNetconfNotification(notification.getContent());
                 preparedMessages.put(notification, parsedNotification);
             }
@@ -69,7 +69,7 @@ public class SimulatedCreateSubscription extends AbstractLastNetconfOperation im
 
     }
 
-    private static Notifications loadNotifications(final File file) {
+    private Notifications loadNotifications(final File file) {
         try {
             final JAXBContext jaxbContext = JAXBContext.newInstance(Notifications.class);
             final Unmarshaller jaxbUnmarshaller = jaxbContext.createUnmarshaller();
@@ -99,9 +99,12 @@ public class SimulatedCreateSubscription extends AbstractLastNetconfOperation im
 
                 delayAggregator += notification.getKey().getDelayInSeconds();
 
-                scheduledExecutorService.schedule(() -> {
-                    Preconditions.checkState(session != null, "Session is not set, cannot process notifications");
-                    session.sendMessage(notification.getValue());
+                scheduledExecutorService.schedule(new Runnable() {
+                    @Override
+                    public void run() {
+                        Preconditions.checkState(session != null, "Session is not set, cannot process notifications");
+                        session.sendMessage(notification.getValue());
+                    }
                 }, delayAggregator, TimeUnit.SECONDS);
             }
         }
@@ -124,8 +127,8 @@ public class SimulatedCreateSubscription extends AbstractLastNetconfOperation im
     }
 
     @Override
-    public void setNetconfSession(final NetconfServerSession newSession) {
-        this.session = newSession;
+    public void setNetconfSession(final NetconfServerSession session) {
+        this.session = session;
     }
 
     @XmlRootElement(name = "notifications")

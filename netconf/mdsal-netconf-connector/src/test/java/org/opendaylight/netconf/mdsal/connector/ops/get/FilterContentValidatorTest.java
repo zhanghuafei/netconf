@@ -11,6 +11,7 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 
 import com.google.common.base.Preconditions;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -72,10 +73,11 @@ public class FilterContentValidatorTest {
 
     @Before
     public void setUp() throws Exception {
-        final SchemaContext context = YangParserTestUtils.parseYangResources(FilterContentValidatorTest.class,
-            "/yang/filter-validator-test-mod-0.yang", "/yang/filter-validator-test-augment.yang",
-            "/yang/mdsal-netconf-mapping-test.yang");
-
+        final List<InputStream> sources = new ArrayList<>();
+        sources.add(getClass().getResourceAsStream("/yang/filter-validator-test-mod-0.yang"));
+        sources.add(getClass().getResourceAsStream("/yang/filter-validator-test-augment.yang"));
+        sources.add(getClass().getResourceAsStream("/yang/mdsal-netconf-mapping-test.yang"));
+        final SchemaContext context = YangParserTestUtils.parseYangStreams(sources);
         final CurrentSchemaContext currentContext = mock(CurrentSchemaContext.class);
         doReturn(context).when(currentContext).getCurrentContext();
         validator = new FilterContentValidator(currentContext);
@@ -87,7 +89,8 @@ public class FilterContentValidatorTest {
         if (expected.startsWith("success")) {
             final String expId = expected.replace("success=", "");
             final YangInstanceIdentifier actual = validator.validate(filterContent);
-            Assert.assertEquals(fromString(expId), actual);
+            final YangInstanceIdentifier expected = fromString(expId);
+            Assert.assertEquals(expected, actual);
         } else if (expected.startsWith("error")) {
             try {
                 validator.validate(filterContent);
@@ -139,10 +142,11 @@ public class FilterContentValidatorTest {
     }
 
     private static QName createNodeQName(final QName prev, final String input) {
-        try {
-            return QName.create(input);
-        } catch (IllegalArgumentException e) {
-            return QName.create(Preconditions.checkNotNull(prev), input);
+        final QName qName = QName.create(input);
+        if (qName.getModule().getNamespace() != null) {
+            return qName;
         }
+
+        return QName.create(Preconditions.checkNotNull(prev), input);
     }
 }

@@ -18,15 +18,14 @@ class NetconfOperationServiceFactoryTracker extends
         ServiceTracker<NetconfOperationServiceFactory, NetconfOperationServiceFactory> {
     private final NetconfOperationServiceFactoryListener factoriesListener;
 
-    NetconfOperationServiceFactoryTracker(final BundleContext context,
+    NetconfOperationServiceFactoryTracker(BundleContext context,
                                           final NetconfOperationServiceFactoryListener factoriesListener) {
         super(context, NetconfOperationServiceFactory.class, null);
         this.factoriesListener = factoriesListener;
     }
 
     @Override
-    public NetconfOperationServiceFactory addingService(
-            final ServiceReference<NetconfOperationServiceFactory> reference) {
+    public NetconfOperationServiceFactory addingService(ServiceReference<NetconfOperationServiceFactory> reference) {
         Object property = reference.getProperty(NetconfConstants.SERVICE_NAME);
         if (property != null && isMarkedForConfig(property)) {
             NetconfOperationServiceFactory netconfOperationServiceFactory = super.addingService(reference);
@@ -38,14 +37,14 @@ class NetconfOperationServiceFactoryTracker extends
     }
 
     @Override
-    public void removedService(final ServiceReference<NetconfOperationServiceFactory> reference,
-                               final NetconfOperationServiceFactory netconfOperationServiceFactory) {
+    public void removedService(ServiceReference<NetconfOperationServiceFactory> reference,
+                               NetconfOperationServiceFactory netconfOperationServiceFactory) {
         if (netconfOperationServiceFactory != null) {
             factoriesListener.onRemoveNetconfOperationServiceFactory(netconfOperationServiceFactory);
         }
     }
 
-    private static boolean isMarkedForConfig(final Object property) {
+    private boolean isMarkedForConfig(Object property) {
         return NetconfConstants.CONFIG_SERVICE_MARKERS.contains(property);
     }
 

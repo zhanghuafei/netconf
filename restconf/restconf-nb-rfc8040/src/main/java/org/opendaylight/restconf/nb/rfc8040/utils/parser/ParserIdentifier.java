@@ -10,15 +10,12 @@ package org.opendaylight.restconf.nb.rfc8040.utils.parser;
 import com.google.common.base.Optional;
 import com.google.common.base.Splitter;
 import com.google.common.collect.Iterables;
-import java.time.format.DateTimeParseException;
-import java.util.AbstractMap.SimpleImmutableEntry;
+import java.text.ParseException;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map.Entry;
 import org.opendaylight.controller.md.sal.dom.api.DOMMountPoint;
 import org.opendaylight.controller.md.sal.dom.api.DOMMountPointService;
-import org.opendaylight.mdsal.dom.api.DOMYangTextSourceProvider;
 import org.opendaylight.restconf.common.context.InstanceIdentifierContext;
 import org.opendaylight.restconf.common.errors.RestconfDocumentedException;
 import org.opendaylight.restconf.common.errors.RestconfError.ErrorTag;
@@ -27,7 +24,7 @@ import org.opendaylight.restconf.common.schema.SchemaExportContext;
 import org.opendaylight.restconf.nb.rfc8040.utils.RestconfConstants;
 import org.opendaylight.restconf.nb.rfc8040.utils.validations.RestconfValidation;
 import org.opendaylight.yangtools.yang.common.QName;
-import org.opendaylight.yangtools.yang.common.Revision;
+import org.opendaylight.yangtools.yang.common.SimpleDateFormatUtil;
 import org.opendaylight.yangtools.yang.data.api.YangInstanceIdentifier;
 import org.opendaylight.yangtools.yang.data.util.DataSchemaContextNode;
 import org.opendaylight.yangtools.yang.data.util.DataSchemaContextTree;
@@ -106,7 +103,7 @@ public final class ParserIdentifier {
             final QName rpcQName = pathYangInstanceIdentifier.getLastPathArgument().getNodeType();
             RpcDefinition def = null;
             for (final RpcDefinition rpcDefinition : mountSchemaContext
-                    .findModule(rpcQName.getModule()).get().getRpcs()) {
+                    .findModuleByNamespaceAndRevision(rpcQName.getNamespace(), rpcQName.getRevision()).getRpcs()) {
                 if (rpcDefinition.getQName().getLocalName().equals(rpcQName.getLocalName())) {
                     def = rpcDefinition;
                     break;
@@ -123,7 +120,9 @@ public final class ParserIdentifier {
             }
             final QName rpcQName = deserialize.getLastPathArgument().getNodeType();
             RpcDefinition def = null;
-            for (final RpcDefinition rpcDefinition : schemaContext.findModule(rpcQName.getModule()).get().getRpcs()) {
+            for (final RpcDefinition rpcDefinition
+                    : schemaContext.findModuleByNamespaceAndRevision(rpcQName.getNamespace(),
+                        rpcQName.getRevision()).getRpcs()) {
                 if (rpcDefinition.getQName().getLocalName().equals(rpcQName.getLocalName())) {
                     def = rpcDefinition;
                     break;
@@ -146,13 +145,13 @@ public final class ParserIdentifier {
     }
 
     /**
-     * Make a moduleName/Revision pair from identifier.
+     * Make a {@link QName} from identifier.
      *
      * @param identifier
      *             path parameter
      * @return {@link QName}
      */
-    public static Entry<String, Revision> makeQNameFromIdentifier(final String identifier) {
+    public static QName makeQNameFromIdentifier(final String identifier) {
         // check if more than one slash is not used as path separator
         if (identifier.contains(
                 String.valueOf(RestconfConstants.SLASH).concat(String.valueOf(RestconfConstants.SLASH)))) {
@@ -179,16 +178,16 @@ public final class ParserIdentifier {
                     ErrorTag.INVALID_VALUE);
         }
 
-        final Revision moduleRevision;
+        final Date moduleRevision;
         try {
-            moduleRevision = Revision.of(pathArgs.get(1));
-        } catch (final DateTimeParseException e) {
+            moduleRevision = SimpleDateFormatUtil.getRevisionFormat().parse(pathArgs.get(1));
+        } catch (final ParseException e) {
             LOG.debug("URI has bad format: '{}'. It should be 'moduleName/yyyy-MM-dd'", identifier);
             throw new RestconfDocumentedException("URI has bad format. It should be \'moduleName/yyyy-MM-dd\'",
-                    ErrorType.PROTOCOL, ErrorTag.INVALID_VALUE, e);
+                    ErrorType.PROTOCOL, ErrorTag.INVALID_VALUE);
         }
 
-        return new SimpleImmutableEntry<>(pathArgs.get(0), moduleRevision);
+        return QName.create(null, moduleRevision, pathArgs.get(0));
     }
 
     /**
@@ -205,15 +204,14 @@ public final class ParserIdentifier {
      * @return {@link SchemaExportContext}
      */
     public static SchemaExportContext toSchemaExportContextFromIdentifier(final SchemaContext schemaContext,
-            final String identifier, final DOMMountPointService domMountPointService,
-            final DOMYangTextSourceProvider sourceProvider) {
+            final String identifier, final DOMMountPointService domMountPointService) {
         final Iterable<String> pathComponents = RestconfConstants.SLASH_SPLITTER.split(identifier);
         final Iterator<String> componentIter = pathComponents.iterator();
         if (!Iterables.contains(pathComponents, RestconfConstants.MOUNT)) {
             final String moduleName = RestconfValidation.validateAndGetModulName(componentIter);
-            final Revision revision = RestconfValidation.validateAndGetRevision(componentIter);
-            final Module module = schemaContext.findModule(moduleName, revision).orElse(null);
-            return new SchemaExportContext(schemaContext, module, sourceProvider);
+            final Date revision = RestconfValidation.validateAndGetRevision(componentIter);
+            final Module module = schemaContext.findModuleByName(moduleName, revision);
+            return new SchemaExportContext(schemaContext, module);
         } else {
             final StringBuilder pathBuilder = new StringBuilder();
             while (componentIter.hasNext()) {
@@ -234,10 +232,9 @@ public final class ParserIdentifier {
             final InstanceIdentifierContext<?> point = ParserIdentifier
                     .toInstanceIdentifier(pathBuilder.toString(), schemaContext, Optional.of(domMountPointService));
             final String moduleName = RestconfValidation.validateAndGetModulName(componentIter);
-            final Revision revision = RestconfValidation.validateAndGetRevision(componentIter);
-            final Module module = point.getMountPoint().getSchemaContext().findModule(moduleName, revision)
-                    .orElse(null);
-            return new SchemaExportContext(point.getMountPoint().getSchemaContext(), module, sourceProvider);
+            final Date revision = RestconfValidation.validateAndGetRevision(componentIter);
+            final Module module = point.getMountPoint().getSchemaContext().findModuleByName(moduleName, revision);
+            return new SchemaExportContext(point.getMountPoint().getSchemaContext(), module);
         }
     }
 }

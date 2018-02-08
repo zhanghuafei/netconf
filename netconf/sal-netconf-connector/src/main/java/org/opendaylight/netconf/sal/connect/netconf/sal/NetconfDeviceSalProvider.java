@@ -115,8 +115,8 @@ public class NetconfDeviceSalProvider implements AutoCloseable {
         }
 
         public synchronized void onTopologyDeviceConnected(final SchemaContext initialCtx,
-                final DOMDataBroker broker, final DOMRpcService rpc,
-                final NetconfDeviceNotificationService newNotificationService) {
+                                                           final DOMDataBroker broker, final DOMRpcService rpc,
+                                                           final NetconfDeviceNotificationService notificationService) {
             Preconditions.checkNotNull(mountService, "Closed");
             Preconditions.checkState(topologyRegistration == null, "Already initialized");
 
@@ -126,8 +126,8 @@ public class NetconfDeviceSalProvider implements AutoCloseable {
 
             mountBuilder.addService(DOMDataBroker.class, broker);
             mountBuilder.addService(DOMRpcService.class, rpc);
-            mountBuilder.addService(DOMNotificationService.class, newNotificationService);
-            this.notificationService = newNotificationService;
+            mountBuilder.addService(DOMNotificationService.class, notificationService);
+            this.notificationService = notificationService;
 
             topologyRegistration = mountBuilder.register();
             LOG.debug("{}: TOPOLOGY Mountpoint exposed into MD-SAL {}", id, topologyRegistration);

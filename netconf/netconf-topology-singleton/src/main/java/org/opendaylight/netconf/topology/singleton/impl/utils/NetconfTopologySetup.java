@@ -41,7 +41,7 @@ public class NetconfTopologySetup {
     private final String privateKeyPassphrase;
     private final AAAEncryptionService encryptionService;
 
-    NetconfTopologySetup(final NetconfTopologySetupBuilder builder) {
+    private NetconfTopologySetup(final NetconfTopologySetupBuilder builder) {
         this.clusterSingletonServiceProvider = builder.getClusterSingletonServiceProvider();
         this.rpcProviderRegistry = builder.getRpcProviderRegistry();
         this.dataBroker = builder.getDataBroker();

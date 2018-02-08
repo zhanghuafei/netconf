@@ -76,7 +76,7 @@ class RpcMapping {
         private final XmlElement xmlElement;
         private final int hashCode;
 
-        Request(final XmlElement element) {
+        private Request(final XmlElement element) {
             this.xmlElement = element;
             hashCode = XmlUtil.toString(element)
                     .replaceAll("message-id=.*(>| )", "") //message id is variable, remove it

@@ -67,23 +67,23 @@ public class DummyFuture<T> implements Future<RpcResult<T>> {
         private boolean isDone;
         private RpcResult<T> result;
 
-        public Builder<T> cancel(final boolean newCancel) {
-            this.cancel = newCancel;
+        public Builder<T> cancel(final boolean cancel) {
+            this.cancel = cancel;
             return this;
         }
 
-        public Builder<T> isCancelled(final boolean cancelled) {
-            this.isCancelled = cancelled;
+        public Builder<T> isCancelled(final boolean isCancelled) {
+            this.isCancelled = isCancelled;
             return this;
         }
 
-        public Builder<T> isDone(final boolean done) {
-            this.isDone = done;
+        public Builder<T> isDone(final boolean isDone) {
+            this.isDone = isDone;
             return this;
         }
 
-        public Builder<T> rpcResult(final RpcResult<T> newResult) {
-            this.result = newResult;
+        public Builder<T> rpcResult(final RpcResult<T> result) {
+            this.result = result;
             return this;
         }
 

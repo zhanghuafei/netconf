@@ -53,7 +53,7 @@ public class ProxyWriteTransactionTest {
         masterActor = new TestProbe(system);
         final RemoteDeviceId id = new RemoteDeviceId("dev1", InetSocketAddress.createUnresolved("localhost", 17830));
         node = Builders.containerBuilder()
-                .withNodeIdentifier(new YangInstanceIdentifier.NodeIdentifier(QName.create("", "cont")))
+                .withNodeIdentifier(new YangInstanceIdentifier.NodeIdentifier(QName.create("cont")))
                 .build();
         tx = new ProxyWriteTransaction(masterActor.ref(), id, system, Timeout.apply(5, TimeUnit.SECONDS));
     }
@@ -73,10 +73,10 @@ public class ProxyWriteTransactionTest {
 
     @Test
     public void testCancelSubmitted() throws Exception {
-        final ListenableFuture<Void> submitFuture = tx.submit();
+        final CheckedFuture<Void, TransactionCommitFailedException> submitFuture = tx.submit();
         masterActor.expectMsgClass(SubmitRequest.class);
         masterActor.reply(new SubmitReply());
-        submitFuture.get();
+        submitFuture.checkedGet();
         final Future<Boolean> submit = Executors.newSingleThreadExecutor().submit(() -> tx.cancel());
         masterActor.expectNoMsg();
         Assert.assertFalse(submit.get());
@@ -84,18 +84,18 @@ public class ProxyWriteTransactionTest {
 
     @Test
     public void testSubmit() throws Exception {
-        final ListenableFuture<Void> submitFuture = tx.submit();
+        final CheckedFuture<Void, TransactionCommitFailedException> submitFuture = tx.submit();
         masterActor.expectMsgClass(SubmitRequest.class);
         masterActor.reply(new SubmitReply());
-        submitFuture.get();
+        submitFuture.checkedGet();
     }
 
     @Test
     public void testDoubleSubmit() throws Exception {
-        final ListenableFuture<Void> submitFuture = tx.submit();
+        final CheckedFuture<Void, TransactionCommitFailedException> submitFuture = tx.submit();
         masterActor.expectMsgClass(SubmitRequest.class);
         masterActor.reply(new SubmitReply());
-        submitFuture.get();
+        submitFuture.checkedGet();
         try {
             tx.submit().checkedGet();
             Assert.fail("Should throw IllegalStateException");

@@ -13,15 +13,12 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import java.net.URI;
 import java.util.Collection;
+import java.util.Date;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
-import org.opendaylight.yangtools.concepts.SemVer;
 import org.opendaylight.yangtools.yang.common.QName;
 import org.opendaylight.yangtools.yang.common.QNameModule;
-import org.opendaylight.yangtools.yang.common.Revision;
-import org.opendaylight.yangtools.yang.common.YangVersion;
-import org.opendaylight.yangtools.yang.model.api.AugmentationSchemaNode;
+import org.opendaylight.yangtools.yang.model.api.AugmentationSchema;
 import org.opendaylight.yangtools.yang.model.api.DataSchemaNode;
 import org.opendaylight.yangtools.yang.model.api.Deviation;
 import org.opendaylight.yangtools.yang.model.api.ExtensionDefinition;
@@ -30,7 +27,6 @@ import org.opendaylight.yangtools.yang.model.api.GroupingDefinition;
 import org.opendaylight.yangtools.yang.model.api.IdentitySchemaNode;
 import org.opendaylight.yangtools.yang.model.api.Module;
 import org.opendaylight.yangtools.yang.model.api.ModuleImport;
-import org.opendaylight.yangtools.yang.model.api.NotificationDefinition;
 import org.opendaylight.yangtools.yang.model.api.RpcDefinition;
 import org.opendaylight.yangtools.yang.model.api.TypeDefinition;
 import org.opendaylight.yangtools.yang.model.api.UnknownSchemaNode;
@@ -65,8 +61,18 @@ final class FakeImportedModule extends ForwardingObject implements Module {
     }
 
     @Override
+    public DataSchemaNode getDataChildByName(final QName name) {
+        return null;
+    }
+
+    @Override
     public Set<UsesNode> getUses() {
         return ImmutableSet.of();
+    }
+
+    @Override
+    public String getModuleSourcePath() {
+        return null;
     }
 
     @Override
@@ -85,7 +91,7 @@ final class FakeImportedModule extends ForwardingObject implements Module {
     }
 
     @Override
-    public Optional<Revision> getRevision() {
+    public Date getRevision() {
         return delegate.getRevision();
     }
 
@@ -95,27 +101,27 @@ final class FakeImportedModule extends ForwardingObject implements Module {
     }
 
     @Override
-    public YangVersion getYangVersion() {
+    public String getYangVersion() {
         return delegate.getYangVersion();
     }
 
     @Override
-    public Optional<String> getDescription() {
+    public String getDescription() {
         return delegate.getDescription();
     }
 
     @Override
-    public Optional<String> getReference() {
+    public String getReference() {
         return delegate.getReference();
     }
 
     @Override
-    public Optional<String> getOrganization() {
+    public String getOrganization() {
         return delegate.getOrganization();
     }
 
     @Override
-    public Optional<String> getContact() {
+    public String getContact() {
         return delegate.getContact();
     }
 
@@ -135,7 +141,7 @@ final class FakeImportedModule extends ForwardingObject implements Module {
     }
 
     @Override
-    public Set<AugmentationSchemaNode> getAugmentations() {
+    public Set<AugmentationSchema> getAugmentations() {
         return ImmutableSet.of();
     }
 
@@ -165,17 +171,7 @@ final class FakeImportedModule extends ForwardingObject implements Module {
     }
 
     @Override
-    public Optional<DataSchemaNode> findDataChildByName(final QName name) {
-        return Optional.empty();
-    }
-
-    @Override
-    public Set<NotificationDefinition> getNotifications() {
-        return delegate.getNotifications();
-    }
-
-    @Override
-    public Optional<SemVer> getSemanticVersion() {
-        return delegate.getSemanticVersion();
+    public String getSource() {
+        return null;
     }
 }

@@ -10,7 +10,7 @@ package org.opendaylight.netconf.api.monitoring;
 /**
  * Class represents change in netconf session.
  */
-public final class SessionEvent {
+public class SessionEvent {
     private final NetconfManagementSession session;
     private final Type type;
 

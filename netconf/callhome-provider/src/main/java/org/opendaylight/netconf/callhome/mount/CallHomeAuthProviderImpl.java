@@ -12,8 +12,10 @@ import com.google.common.net.InetAddresses;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
-import java.security.GeneralSecurityException;
+import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
 import java.security.PublicKey;
+import java.security.spec.InvalidKeySpecException;
 import java.util.Collection;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -62,7 +64,7 @@ public class CallHomeAuthProviderImpl implements CallHomeAuthorizationProvider, 
 
     private final CallhomeStatusReporter statusReporter;
 
-    CallHomeAuthProviderImpl(final DataBroker broker) {
+    CallHomeAuthProviderImpl(DataBroker broker) {
         configReg = broker.registerDataTreeChangeListener(GLOBAL, globalConfig);
         deviceReg = broker.registerDataTreeChangeListener(ALLOWED_DEVICES, deviceConfig);
         deviceOpReg = broker.registerDataTreeChangeListener(ALLOWED_OP_DEVICES, deviceOp);
@@ -71,8 +73,7 @@ public class CallHomeAuthProviderImpl implements CallHomeAuthorizationProvider, 
 
     @Nonnull
     @Override
-    public CallHomeAuthorization provideAuth(@Nonnull final SocketAddress remoteAddress,
-            @Nonnull final PublicKey serverKey) {
+    public CallHomeAuthorization provideAuth(@Nonnull SocketAddress remoteAddress, @Nonnull PublicKey serverKey) {
         Device deviceSpecific = deviceConfig.get(serverKey);
         String sessionName;
         Credentials deviceCred;
@@ -118,7 +119,7 @@ public class CallHomeAuthProviderImpl implements CallHomeAuthorizationProvider, 
         deviceOpReg.close();
     }
 
-    private static String fromRemoteAddress(final SocketAddress remoteAddress) {
+    private String fromRemoteAddress(SocketAddress remoteAddress) {
         if (remoteAddress instanceof InetSocketAddress) {
             InetSocketAddress socketAddress = (InetSocketAddress) remoteAddress;
             return InetAddresses.toAddrString(socketAddress.getAddress()) + ":" + socketAddress.getPort();
@@ -133,14 +134,14 @@ public class CallHomeAuthProviderImpl implements CallHomeAuthorizationProvider, 
         private final ConcurrentMap<PublicKey, Device> byPublicKey = new ConcurrentHashMap<>();
 
         @Override
-        public void onDataTreeChanged(@Nonnull final Collection<DataTreeModification<Device>> mods) {
+        public void onDataTreeChanged(@Nonnull Collection<DataTreeModification<Device>> mods) {
             for (DataTreeModification<Device> dataTreeModification : mods) {
                 DataObjectModification<Device> rootNode = dataTreeModification.getRootNode();
                 process(rootNode);
             }
         }
 
-        private void process(final DataObjectModification<Device> deviceMod) {
+        private void process(DataObjectModification<Device> deviceMod) {
             Device before = deviceMod.getDataBefore();
             Device after = deviceMod.getDataAfter();
 
@@ -158,7 +159,7 @@ public class CallHomeAuthProviderImpl implements CallHomeAuthorizationProvider, 
             }
         }
 
-        private void putDevice(final Device device) {
+        private void putDevice(Device device) {
             PublicKey key = publicKey(device);
             if (key == null) {
                 return;
@@ -166,7 +167,7 @@ public class CallHomeAuthProviderImpl implements CallHomeAuthorizationProvider, 
             byPublicKey.put(key, device);
         }
 
-        private void removeDevice(final Device device) {
+        private void removeDevice(Device device) {
             PublicKey key = publicKey(device);
             if (key == null) {
                 return;
@@ -174,17 +175,17 @@ public class CallHomeAuthProviderImpl implements CallHomeAuthorizationProvider, 
             byPublicKey.remove(key);
         }
 
-        private PublicKey publicKey(final Device device) {
+        private PublicKey publicKey(Device device) {
             String hostKey = device.getSshHostKey();
             try {
                 return keyDecoder.decodePublicKey(hostKey);
-            } catch (GeneralSecurityException e) {
+            } catch (InvalidKeySpecException | NoSuchAlgorithmException | NoSuchProviderException e) {
                 LOG.error("Unable to decode SSH key for {}. Ignoring update for this device", device.getUniqueId(), e);
                 return null;
             }
         }
 
-        private Device get(final PublicKey key) {
+        private Device get(PublicKey key) {
             return byPublicKey.get(key);
         }
     }
@@ -194,14 +195,14 @@ public class CallHomeAuthProviderImpl implements CallHomeAuthorizationProvider, 
         private final ConcurrentMap<String, Device> byPublicKey = new ConcurrentHashMap<>();
 
         @Override
-        public void onDataTreeChanged(@Nonnull final Collection<DataTreeModification<Device>> mods) {
+        public void onDataTreeChanged(@Nonnull Collection<DataTreeModification<Device>> mods) {
             for (DataTreeModification<Device> dataTreeModification : mods) {
                 DataObjectModification<Device> rootNode = dataTreeModification.getRootNode();
                 process(rootNode);
             }
         }
 
-        private void process(final DataObjectModification<Device> deviceMod) {
+        private void process(DataObjectModification<Device> deviceMod) {
             Device before = deviceMod.getDataBefore();
             Device after = deviceMod.getDataAfter();
 
@@ -219,17 +220,17 @@ public class CallHomeAuthProviderImpl implements CallHomeAuthorizationProvider, 
             }
         }
 
-        private void putDevice(final Device device) {
+        private void putDevice(Device device) {
             String key = device.getSshHostKey();
             byPublicKey.put(key, device);
         }
 
-        private void removeDevice(final Device device) {
+        private void removeDevice(Device device) {
             String key = device.getSshHostKey();
             byPublicKey.remove(key);
         }
 
-        Device get(final PublicKey serverKey) {
+        Device get(PublicKey serverKey) {
             String skey = "";
 
             try {
@@ -247,7 +248,7 @@ public class CallHomeAuthProviderImpl implements CallHomeAuthorizationProvider, 
         private volatile Global current = null;
 
         @Override
-        public void onDataTreeChanged(@Nonnull final Collection<DataTreeModification<Global>> mods) {
+        public void onDataTreeChanged(@Nonnull Collection<DataTreeModification<Global>> mods) {
             for (DataTreeModification<Global> dataTreeModification : mods) {
                 current = dataTreeModification.getRootNode().getDataAfter();
             }

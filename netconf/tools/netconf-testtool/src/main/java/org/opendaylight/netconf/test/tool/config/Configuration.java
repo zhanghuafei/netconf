@@ -9,22 +9,15 @@ package org.opendaylight.netconf.test.tool.config;
 
 import com.google.common.collect.ImmutableSet;
 import java.io.File;
-import java.security.PublicKey;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
-import org.apache.sshd.server.auth.pubkey.PublickeyAuthenticator;
-import org.apache.sshd.server.session.ServerSession;
 import org.opendaylight.netconf.api.xml.XmlNetconfConstants;
-import org.opendaylight.netconf.auth.AuthProvider;
 import org.opendaylight.netconf.test.tool.operations.OperationsCreator;
 import org.opendaylight.netconf.test.tool.rpchandler.RpcHandler;
 import org.opendaylight.netconf.test.tool.rpchandler.RpcHandlerDefault;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
 
 public class Configuration {
-
-    private static final Logger LOG = LoggerFactory.getLogger(Configuration.class);
 
     public static final Set<String> DEFAULT_BASE_CAPABILITIES_EXI = ImmutableSet.of(
             XmlNetconfConstants.URN_IETF_PARAMS_NETCONF_BASE_1_0,
@@ -37,44 +30,17 @@ public class Configuration {
             XmlNetconfConstants.URN_IETF_PARAMS_NETCONF_BASE_1_1
     );
 
-    public static final Set<YangResource> DEFAULT_YANG_RESOURCES = ImmutableSet.of(
-            new YangResource("ietf-netconf-monitoring", "2010-10-04",
-                    "/META-INF/yang/ietf-netconf-monitoring.yang"),
-            new YangResource("ietf-netconf-monitoring-extension", "2013-12-10",
-                    "/META-INF/yang/ietf-netconf-monitoring-extension.yang"),
-            new YangResource("ietf-yang-types", "2013-07-15",
-                    "/META-INF/yang/ietf-yang-types@2013-07-15.yang"),
-            new YangResource("ietf-inet-types", "2013-07-15",
-                    "/META-INF/yang/ietf-inet-types@2013-07-15.yang")
-    );
-
-    public static final AuthProvider DEFAULT_AUTH_PROVIDER = (username, password) -> {
-        LOG.info("Auth with username and password: {}", username);
-        return true;
-    };
-
-    public static final PublickeyAuthenticator DEFAULT_PUBLIC_KEY_AUTHENTICATOR = new PublickeyAuthenticator() {
-        @Override
-        public boolean authenticate(final String username, final PublicKey key, final ServerSession session) {
-            LOG.info("Auth with public key: {}", key);
-            return true;
-        }
-    };
-
     private int generateConfigsTimeout = (int) TimeUnit.MINUTES.toMillis(30);
     private int threadPoolSize = 8;
     private int startingPort = 17830;
     private int deviceCount = 1;
     private boolean ssh = true;
     private String ip = "0.0.0.0";
-    private Set<YangResource> defaultYangResources = DEFAULT_YANG_RESOURCES;
 
     private Set<String> models;
     private Set<String> capabilities = DEFAULT_BASE_CAPABILITIES_EXI;
     private RpcHandler rpcHandler = new RpcHandlerDefault();
     private OperationsCreator operationsCreator;
-    private AuthProvider authProvider = DEFAULT_AUTH_PROVIDER;
-    private PublickeyAuthenticator publickeyAuthenticator = DEFAULT_PUBLIC_KEY_AUTHENTICATOR;
 
     @Deprecated
     private boolean mdSal = false;
@@ -94,35 +60,11 @@ public class Configuration {
     public Configuration() {
     }
 
-    public PublickeyAuthenticator getPublickeyAuthenticator() {
-        return publickeyAuthenticator;
-    }
-
-    public void setPublickeyAuthenticator(final PublickeyAuthenticator publickeyAuthenticator) {
-        this.publickeyAuthenticator = publickeyAuthenticator;
-    }
-
-    public AuthProvider getAuthProvider() {
-        return authProvider;
-    }
-
-    public void setAuthProvider(final AuthProvider authProvider) {
-        this.authProvider = authProvider;
-    }
-
-    public Set<YangResource> getDefaultYangResources() {
-        return defaultYangResources;
-    }
-
-    public void setDefaultYangResources(final Set<YangResource> defaultYangResources) {
-        this.defaultYangResources = defaultYangResources;
-    }
-
     public int getThreadPoolSize() {
         return threadPoolSize;
     }
 
-    public void setThreadPoolSize(final int threadPoolSize) {
+    public void setThreadPoolSize(int threadPoolSize) {
         this.threadPoolSize = threadPoolSize;
     }
 
@@ -130,7 +72,7 @@ public class Configuration {
         return startingPort;
     }
 
-    public void setStartingPort(final int startingPort) {
+    public void setStartingPort(int startingPort) {
         this.startingPort = startingPort;
     }
 
@@ -138,7 +80,7 @@ public class Configuration {
         return deviceCount;
     }
 
-    public void setDeviceCount(final int deviceCount) {
+    public void setDeviceCount(int deviceCount) {
         this.deviceCount = deviceCount;
     }
 
@@ -146,7 +88,7 @@ public class Configuration {
         return generateConfigsTimeout;
     }
 
-    public void setGenerateConfigsTimeout(final int generateConfigsTimeout) {
+    public void setGenerateConfigsTimeout(int generateConfigsTimeout) {
         this.generateConfigsTimeout = generateConfigsTimeout;
     }
 
@@ -154,7 +96,7 @@ public class Configuration {
         return ssh;
     }
 
-    public void setSsh(final boolean ssh) {
+    public void setSsh(boolean ssh) {
         this.ssh = ssh;
     }
 
@@ -162,7 +104,7 @@ public class Configuration {
         return ip;
     }
 
-    public void setIp(final String ip) {
+    public void setIp(String ip) {
         this.ip = ip;
     }
 
@@ -170,7 +112,7 @@ public class Configuration {
         return models;
     }
 
-    public void setModels(final Set<String> models) {
+    public void setModels(Set<String> models) {
         this.models = models;
     }
 
@@ -178,7 +120,7 @@ public class Configuration {
         return capabilities;
     }
 
-    public void setCapabilities(final Set<String> capabilities) {
+    public void setCapabilities(Set<String> capabilities) {
         this.capabilities = capabilities;
     }
 
@@ -186,7 +128,7 @@ public class Configuration {
         return rpcHandler;
     }
 
-    public void setRpcHandler(final RpcHandler rpcHandler) {
+    public void setRpcHandler(RpcHandler rpcHandler) {
         this.rpcHandler = rpcHandler;
     }
 
@@ -194,7 +136,7 @@ public class Configuration {
         return operationsCreator;
     }
 
-    public void setOperationsCreator(final OperationsCreator operationsCreator) {
+    public void setOperationsCreator(OperationsCreator operationsCreator) {
         this.operationsCreator = operationsCreator;
     }
 
@@ -204,7 +146,7 @@ public class Configuration {
     }
 
     @Deprecated
-    public void setMdSal(final boolean mdSal) {
+    public void setMdSal(boolean mdSal) {
         this.mdSal = mdSal;
     }
 
@@ -214,7 +156,7 @@ public class Configuration {
     }
 
     @Deprecated
-    public void setRpcConfigFile(final File rpcConfigFile) {
+    public void setRpcConfigFile(File rpcConfigFile) {
         this.rpcConfigFile = rpcConfigFile;
     }
 
@@ -224,7 +166,7 @@ public class Configuration {
     }
 
     @Deprecated
-    public void setNotificationFile(final File notificationFile) {
+    public void setNotificationFile(File notificationFile) {
         this.notificationFile = notificationFile;
     }
 
@@ -234,7 +176,7 @@ public class Configuration {
     }
 
     @Deprecated
-    public void setInitialConfigXMLFile(final File initialConfigXMLFile) {
+    public void setInitialConfigXMLFile(File initialConfigXMLFile) {
         this.initialConfigXMLFile = initialConfigXMLFile;
     }
 
@@ -249,7 +191,7 @@ public class Configuration {
     }
 
     @Deprecated
-    public void setSchemasDir(final File schemasDir) {
+    public void setSchemasDir(File schemasDir) {
         this.schemasDir = schemasDir;
     }
 }

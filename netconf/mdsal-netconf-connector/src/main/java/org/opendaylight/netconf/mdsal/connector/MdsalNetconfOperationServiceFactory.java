@@ -8,6 +8,7 @@
 
 package org.opendaylight.netconf.mdsal.connector;
 
+import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.io.CharStreams;
 import java.io.IOException;
@@ -15,9 +16,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
-import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
 import org.opendaylight.controller.config.util.capability.Capability;
 import org.opendaylight.controller.config.util.capability.YangModuleCapability;
 import org.opendaylight.controller.md.sal.dom.api.DOMDataBroker;
@@ -26,9 +25,11 @@ import org.opendaylight.controller.sal.core.api.model.SchemaService;
 import org.opendaylight.netconf.api.monitoring.CapabilityListener;
 import org.opendaylight.netconf.mapping.api.NetconfOperationServiceFactory;
 import org.opendaylight.netconf.mapping.api.NetconfOperationServiceFactoryListener;
+import org.opendaylight.yangtools.yang.common.SimpleDateFormatUtil;
 import org.opendaylight.yangtools.yang.model.api.Module;
 import org.opendaylight.yangtools.yang.model.api.SchemaContext;
 import org.opendaylight.yangtools.yang.model.repo.api.RevisionSourceIdentifier;
+import org.opendaylight.yangtools.yang.model.repo.api.SchemaSourceException;
 import org.opendaylight.yangtools.yang.model.repo.api.SourceIdentifier;
 import org.opendaylight.yangtools.yang.model.repo.api.YangTextSchemaSource;
 import org.opendaylight.yangtools.yang.model.repo.spi.SchemaSourceProvider;
@@ -117,14 +118,16 @@ public class MdsalNetconfOperationServiceFactory implements NetconfOperationServ
             final Module module, final SchemaSourceProvider<YangTextSchemaSource> rootSchemaSourceProviderDependency) {
 
         final SourceIdentifier moduleSourceIdentifier = RevisionSourceIdentifier.create(module.getName(),
-                module.getRevision());
+                SimpleDateFormatUtil.DEFAULT_DATE_REV == module.getRevision() ? Optional.absent() :
+                        Optional.of(module.getQNameModule().getFormattedRevision()));
 
         InputStream sourceStream = null;
         String source;
         try {
-            sourceStream = rootSchemaSourceProviderDependency.getSource(moduleSourceIdentifier).get().openStream();
+            sourceStream = rootSchemaSourceProviderDependency.getSource(moduleSourceIdentifier).checkedGet()
+                    .openStream();
             source = CharStreams.toString(new InputStreamReader(sourceStream, StandardCharsets.UTF_8));
-        } catch (ExecutionException | InterruptedException | IOException e) {
+        } catch (IOException | SchemaSourceException e) {
             LOG.warn("Ignoring source for module {}. Unable to read content", moduleSourceIdentifier, e);
             source = null;
         }
@@ -143,7 +146,7 @@ public class MdsalNetconfOperationServiceFactory implements NetconfOperationServ
 
         LOG.warn("Missing source for module {}. This module will not be available from netconf server",
             moduleSourceIdentifier);
-        return Optional.empty();
+        return Optional.absent();
     }
 
     @Override

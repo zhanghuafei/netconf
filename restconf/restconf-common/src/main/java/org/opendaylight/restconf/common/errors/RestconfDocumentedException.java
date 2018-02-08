@@ -156,7 +156,7 @@ public class RestconfDocumentedException extends WebApplicationException {
         this.status = status;
     }
 
-    public RestconfDocumentedException(final Throwable cause, final RestconfError error) {
+    private RestconfDocumentedException(final Throwable cause, final RestconfError error) {
         super(cause);
         Preconditions.checkNotNull(error, "RestconfError can't be null");
         errors = ImmutableList.of(error);

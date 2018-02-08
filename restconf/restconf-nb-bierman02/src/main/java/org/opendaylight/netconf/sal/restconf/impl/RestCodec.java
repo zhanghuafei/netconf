@@ -41,14 +41,14 @@ import org.opendaylight.yangtools.yang.model.api.type.LeafrefTypeDefinition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public final class RestCodec {
+public class RestCodec {
 
     private static final Logger LOG = LoggerFactory.getLogger(RestCodec.class);
 
     private RestCodec() {
     }
 
-    public static Codec<Object, Object> from(final TypeDefinition<?> typeDefinition,
+    public static final Codec<Object, Object> from(final TypeDefinition<?> typeDefinition,
             final DOMMountPoint mountPoint) {
         return new ObjectCodec(typeDefinition, mountPoint);
     }

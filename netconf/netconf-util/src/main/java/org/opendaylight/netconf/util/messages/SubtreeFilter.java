@@ -25,12 +25,8 @@ import org.w3c.dom.Node;
 /**
  * See <a href="http://tools.ietf.org/html/rfc6241#section-6">rfc6241</a> for details.
  */
-public final class SubtreeFilter {
+public class SubtreeFilter {
     private static final Logger LOG = LoggerFactory.getLogger(SubtreeFilter.class);
-
-    private SubtreeFilter() {
-
-    }
 
     public static Document applyRpcSubtreeFilter(Document requestDocument,
                                                  Document rpcReply) throws DocumentedException {

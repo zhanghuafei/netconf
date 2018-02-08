@@ -148,7 +148,7 @@ public class NetconfMessageTransformerTest {
 
     @Test
     public void tesGetSchemaResponse() throws Exception {
-        final NetconfMessageTransformer transformer = getTransformer(getSchema(true));
+        final NetconfMessageTransformer netconfMessageTransformer = getTransformer(getSchema(true));
         final NetconfMessage response = new NetconfMessage(XmlUtil.readXmlToDocument(
                 "<rpc-reply message-id=\"101\"\n"
                         + "xmlns=\"urn:ietf:params:xml:ns:netconf:base:1.0\">\n"
@@ -160,7 +160,8 @@ public class NetconfMessageTransformerTest {
                         + "</data>\n"
                         + "</rpc-reply>"
         ));
-        final DOMRpcResult compositeNodeRpcResult = transformer.toRpcResult(response, toPath(GET_SCHEMA_QNAME));
+        final DOMRpcResult compositeNodeRpcResult =
+                netconfMessageTransformer.toRpcResult(response, toPath(GET_SCHEMA_QNAME));
         assertTrue(compositeNodeRpcResult.getErrors().isEmpty());
         assertNotNull(compositeNodeRpcResult.getResult());
         final DOMSource schemaContent =
@@ -186,9 +187,9 @@ public class NetconfMessageTransformerTest {
                 + "</data>\n"
                 + "</rpc-reply>"));
 
-        final NetconfMessageTransformer transformer = getTransformer(getSchema(true));
+        final NetconfMessageTransformer netconfMessageTransformer = getTransformer(getSchema(true));
         final DOMRpcResult compositeNodeRpcResult =
-                transformer.toRpcResult(response, toPath(NETCONF_GET_CONFIG_QNAME));
+                netconfMessageTransformer.toRpcResult(response, toPath(NETCONF_GET_CONFIG_QNAME));
         assertTrue(compositeNodeRpcResult.getErrors().isEmpty());
         assertNotNull(compositeNodeRpcResult.getResult());
 

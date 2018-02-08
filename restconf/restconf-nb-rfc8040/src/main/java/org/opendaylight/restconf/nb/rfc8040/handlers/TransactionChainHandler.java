@@ -31,7 +31,6 @@ public class TransactionChainHandler implements Handler<DOMTransactionChain> {
     }
 
     @Override
-    @SuppressWarnings("checkstyle:hiddenField")
     public void update(final DOMTransactionChain transactionChain) {
         Preconditions.checkNotNull(transactionChain);
         this.transactionChain = transactionChain;

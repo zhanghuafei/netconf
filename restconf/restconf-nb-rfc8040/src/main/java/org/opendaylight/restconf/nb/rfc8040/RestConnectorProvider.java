@@ -9,9 +9,6 @@
 package org.opendaylight.restconf.nb.rfc8040;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.ImmutableSet.Builder;
-import java.util.Set;
 import org.opendaylight.controller.md.sal.common.api.data.AsyncTransaction;
 import org.opendaylight.controller.md.sal.common.api.data.TransactionChain;
 import org.opendaylight.controller.md.sal.common.api.data.TransactionChainListener;
@@ -19,7 +16,7 @@ import org.opendaylight.controller.md.sal.dom.api.DOMDataBroker;
 import org.opendaylight.controller.md.sal.dom.api.DOMMountPointService;
 import org.opendaylight.controller.md.sal.dom.api.DOMNotificationService;
 import org.opendaylight.controller.md.sal.dom.api.DOMRpcService;
-import org.opendaylight.mdsal.dom.api.DOMSchemaService;
+import org.opendaylight.controller.sal.core.api.model.SchemaService;
 import org.opendaylight.restconf.common.errors.RestconfDocumentedException;
 import org.opendaylight.restconf.nb.rfc8040.handlers.DOMDataBrokerHandler;
 import org.opendaylight.restconf.nb.rfc8040.handlers.DOMMountPointServiceHandler;
@@ -60,30 +57,21 @@ public class RestConnectorProvider<T extends ServiceWrapper> implements Restconf
     private static DOMDataBroker dataBroker;
     private static DOMMountPointServiceHandler mountPointServiceHandler;
 
+    private final SchemaService schemaService;
     private final DOMRpcService rpcService;
     private final DOMNotificationService notificationService;
     private final DOMMountPointService mountPointService;
-    private final DOMSchemaService domSchemaService;
-    private final Builder<Object> servicesProperties;
+    private final T wrapperServices;
 
     private ListenerRegistration<SchemaContextListener> listenerRegistration;
     private SchemaContextHandler schemaCtxHandler;
-    private T wrapperServices;
 
-    // FIXME: refactor this class and its users to interact via builder pattern, where individual
-    // services are injected and then the provider is created
     public RestConnectorProvider(final DOMDataBroker domDataBroker,
-            final DOMSchemaService domSchemaService, final DOMRpcService rpcService,
-            final DOMNotificationService notificationService, final DOMMountPointService mountPointService) {
-        this(domDataBroker, domSchemaService, rpcService, notificationService, mountPointService, null);
-    }
-
-    public RestConnectorProvider(final DOMDataBroker domDataBroker, final DOMSchemaService domSchemaService,
-            final DOMRpcService rpcService, final DOMNotificationService notificationService,
-            final DOMMountPointService mountPointService, final T wrapperServices) {
-        this.servicesProperties = ImmutableSet.<Object>builder();
-        this.wrapperServices = wrapperServices;
-        this.domSchemaService = Preconditions.checkNotNull(domSchemaService);
+            final SchemaService schemaService, final DOMRpcService rpcService,
+            final DOMNotificationService notificationService, final DOMMountPointService mountPointService,
+            final T wrapperServices) {
+        this.wrapperServices = Preconditions.checkNotNull(wrapperServices);
+        this.schemaService = Preconditions.checkNotNull(schemaService);
         this.rpcService = Preconditions.checkNotNull(rpcService);
         this.notificationService = Preconditions.checkNotNull(notificationService);
         this.mountPointService = Preconditions.checkNotNull(mountPointService);
@@ -91,33 +79,25 @@ public class RestConnectorProvider<T extends ServiceWrapper> implements Restconf
         RestConnectorProvider.dataBroker = Preconditions.checkNotNull(domDataBroker);
     }
 
-    public synchronized void start() {
+    public void start() {
         mountPointServiceHandler = new DOMMountPointServiceHandler(mountPointService);
-        servicesProperties.add(mountPointServiceHandler);
 
         final DOMDataBrokerHandler brokerHandler = new DOMDataBrokerHandler(dataBroker);
-        servicesProperties.add(brokerHandler);
 
         RestConnectorProvider.transactionChainHandler = new TransactionChainHandler(dataBroker
                 .createTransactionChain(RestConnectorProvider.TRANSACTION_CHAIN_LISTENER));
-        servicesProperties.add(transactionChainHandler);
 
         this.schemaCtxHandler = new SchemaContextHandler(transactionChainHandler);
-        servicesProperties.add(schemaCtxHandler);
-        this.listenerRegistration = domSchemaService.registerSchemaContextListener(this.schemaCtxHandler);
+        this.listenerRegistration = schemaService.registerSchemaContextListener(this.schemaCtxHandler);
 
         final RpcServiceHandler rpcServiceHandler = new RpcServiceHandler(rpcService);
-        servicesProperties.add(rpcServiceHandler);
 
         final NotificationServiceHandler notificationServiceHandler =
                 new NotificationServiceHandler(notificationService);
-        servicesProperties.add(notificationServiceHandler);
 
-        if (wrapperServices != null) {
-            wrapperServices.setHandlers(this.schemaCtxHandler, RestConnectorProvider.mountPointServiceHandler,
-                    RestConnectorProvider.transactionChainHandler, brokerHandler, rpcServiceHandler,
-                    notificationServiceHandler, domSchemaService);
-        }
+        wrapperServices.setHandlers(this.schemaCtxHandler, RestConnectorProvider.mountPointServiceHandler,
+                RestConnectorProvider.transactionChainHandler, brokerHandler, rpcServiceHandler,
+                notificationServiceHandler);
     }
 
     public DOMMountPointServiceHandler getMountPointServiceHandler() {
@@ -162,9 +142,5 @@ public class RestConnectorProvider<T extends ServiceWrapper> implements Restconf
         transactionChainHandler = null;
         mountPointServiceHandler = null;
         dataBroker = null;
-    }
-
-    public final synchronized Set<Object> getServicesProperties() {
-        return servicesProperties.build();
     }
 }

@@ -7,7 +7,6 @@
  */
 package org.opendaylight.restconf.nb.rfc8040.services.wrapper;
 
-import org.opendaylight.mdsal.dom.api.DOMSchemaService;
 import org.opendaylight.restconf.nb.rfc8040.handlers.DOMDataBrokerHandler;
 import org.opendaylight.restconf.nb.rfc8040.handlers.DOMMountPointServiceHandler;
 import org.opendaylight.restconf.nb.rfc8040.handlers.NotificationServiceHandler;
@@ -19,6 +18,5 @@ public interface ServiceWrapper {
 
     void setHandlers(SchemaContextHandler schemaCtxHandler, DOMMountPointServiceHandler domMountPointServiceHandler,
             TransactionChainHandler transactionChainHandler, DOMDataBrokerHandler domDataBrokerHandler,
-            RpcServiceHandler rpcServiceHandler, NotificationServiceHandler notificationServiceHandler,
-            DOMSchemaService domSchemaService);
+            RpcServiceHandler rpcServiceHandler, NotificationServiceHandler notificationServiceHandler);
 }

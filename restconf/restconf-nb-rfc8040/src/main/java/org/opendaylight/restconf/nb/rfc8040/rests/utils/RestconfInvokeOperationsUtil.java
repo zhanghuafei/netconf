@@ -28,7 +28,7 @@ import org.slf4j.LoggerFactory;
  * Util class for rpc.
  *
  */
-public final class RestconfInvokeOperationsUtil {
+public class RestconfInvokeOperationsUtil {
 
     private static final Logger LOG = LoggerFactory.getLogger(RestconfInvokeOperationsUtil.class);
 
@@ -102,7 +102,7 @@ public final class RestconfInvokeOperationsUtil {
         } catch (final CancellationException e) {
             final String errMsg = "The operation was cancelled while executing.";
             LOG.debug("Cancel RpcExecution: " + errMsg, e);
-            throw new RestconfDocumentedException(errMsg, ErrorType.RPC, ErrorTag.PARTIAL_OPERATION, e);
+            throw new RestconfDocumentedException(errMsg, ErrorType.RPC, ErrorTag.PARTIAL_OPERATION);
         }
     }
 

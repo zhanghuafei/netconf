@@ -8,7 +8,6 @@
 package org.opendaylight.restconf.nb.rfc8040.rests.services.impl;
 
 import java.net.URI;
-import javax.ws.rs.Path;
 import javax.ws.rs.core.UriInfo;
 import org.opendaylight.controller.md.sal.dom.api.DOMMountPoint;
 import org.opendaylight.controller.md.sal.dom.api.DOMRpcResult;
@@ -32,27 +31,15 @@ import org.opendaylight.yangtools.yang.model.api.SchemaPath;
  * Implementation of {@link RestconfInvokeOperationsService}.
  *
  */
-@Path("/")
 public class RestconfInvokeOperationsServiceImpl implements RestconfInvokeOperationsService {
 
-    private RpcServiceHandler rpcServiceHandler;
-    private SchemaContextHandler schemaContextHandler;
+    private final RpcServiceHandler rpcServiceHandler;
+    private final SchemaContextHandler schemaContextHandler;
 
     public RestconfInvokeOperationsServiceImpl(final RpcServiceHandler rpcServiceHandler,
             final SchemaContextHandler schemaContextHandler) {
         this.rpcServiceHandler = rpcServiceHandler;
         this.schemaContextHandler = schemaContextHandler;
-    }
-
-    @Override
-    public synchronized void updateHandlers(final Object... handlers) {
-        for (final Object object : handlers) {
-            if (object instanceof SchemaContextHandler) {
-                schemaContextHandler = (SchemaContextHandler) object;
-            } else if (object instanceof RpcServiceHandler) {
-                rpcServiceHandler = (RpcServiceHandler) object;
-            }
-        }
     }
 
     @Override

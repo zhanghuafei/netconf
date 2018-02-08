@@ -11,19 +11,15 @@ import com.google.common.collect.ImmutableList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import org.opendaylight.restconf.common.errors.RestconfDocumentedException;
 import org.opendaylight.yangtools.yang.common.QName;
-import org.opendaylight.yangtools.yang.model.api.ActionDefinition;
-import org.opendaylight.yangtools.yang.model.api.AugmentationSchemaNode;
+import org.opendaylight.yangtools.yang.model.api.AugmentationSchema;
+import org.opendaylight.yangtools.yang.model.api.ConstraintDefinition;
 import org.opendaylight.yangtools.yang.model.api.ContainerSchemaNode;
 import org.opendaylight.yangtools.yang.model.api.DataSchemaNode;
 import org.opendaylight.yangtools.yang.model.api.GroupingDefinition;
 import org.opendaylight.yangtools.yang.model.api.LeafSchemaNode;
-import org.opendaylight.yangtools.yang.model.api.MustDefinition;
-import org.opendaylight.yangtools.yang.model.api.NotificationDefinition;
-import org.opendaylight.yangtools.yang.model.api.RevisionAwareXPath;
 import org.opendaylight.yangtools.yang.model.api.SchemaPath;
 import org.opendaylight.yangtools.yang.model.api.Status;
 import org.opendaylight.yangtools.yang.model.api.TypeDefinition;
@@ -61,10 +57,10 @@ class FakeContainerSchemaNode implements ContainerSchemaNode {
     }
 
     @Override
-    public Optional<DataSchemaNode> findDataChildByName(final QName name) {
+    public DataSchemaNode getDataChildByName(final QName name) {
         for (final DataSchemaNode node : this.children) {
             if (node.getQName().equals(name)) {
-                return Optional.of(node);
+                return node;
             }
         }
         throw new RestconfDocumentedException(name + " is not in child of " + PATH.getLastComponent());
@@ -76,7 +72,7 @@ class FakeContainerSchemaNode implements ContainerSchemaNode {
     }
 
     @Override
-    public Set<AugmentationSchemaNode> getAvailableAugmentations() {
+    public Set<AugmentationSchema> getAvailableAugmentations() {
         return new HashSet<>();
     }
 
@@ -96,6 +92,11 @@ class FakeContainerSchemaNode implements ContainerSchemaNode {
     }
 
     @Override
+    public ConstraintDefinition getConstraints() {
+        throw new UnsupportedOperationException("Not supported.");
+    }
+
+    @Override
     public QName getQName() {
         return PATH.getLastComponent();
     }
@@ -111,12 +112,12 @@ class FakeContainerSchemaNode implements ContainerSchemaNode {
     }
 
     @Override
-    public Optional<String> getDescription() {
+    public String getDescription() {
         throw new UnsupportedOperationException("Not supported.");
     }
 
     @Override
-    public Optional<String> getReference() {
+    public String getReference() {
         throw new UnsupportedOperationException("Not supported.");
     }
 
@@ -127,26 +128,6 @@ class FakeContainerSchemaNode implements ContainerSchemaNode {
 
     @Override
     public boolean isPresenceContainer() {
-        throw new UnsupportedOperationException("Not supported.");
-    }
-
-    @Override
-    public Optional<RevisionAwareXPath> getWhenCondition() {
-        throw new UnsupportedOperationException("Not supported.");
-    }
-
-    @Override
-    public Set<NotificationDefinition> getNotifications() {
-        throw new UnsupportedOperationException("Not supported.");
-    }
-
-    @Override
-    public Set<ActionDefinition> getActions() {
-        throw new UnsupportedOperationException("Not supported.");
-    }
-
-    @Override
-    public Collection<MustDefinition> getMustConstraints() {
         throw new UnsupportedOperationException("Not supported.");
     }
 }

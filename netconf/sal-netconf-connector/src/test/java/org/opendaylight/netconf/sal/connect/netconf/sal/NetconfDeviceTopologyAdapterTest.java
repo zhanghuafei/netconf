@@ -17,8 +17,12 @@ import static org.mockito.Mockito.verify;
 
 import com.google.common.base.Optional;
 import com.google.common.util.concurrent.Futures;
+import java.io.InputStream;
 import java.net.InetSocketAddress;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.EnumMap;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import javassist.ClassPool;
@@ -68,7 +72,7 @@ import org.opendaylight.yangtools.yang.test.util.YangParserTestUtils;
 
 public class NetconfDeviceTopologyAdapterTest {
 
-    private final RemoteDeviceId id = new RemoteDeviceId("test", new InetSocketAddress("localhost", 22));
+    private RemoteDeviceId id = new RemoteDeviceId("test", new InetSocketAddress("localhost", 22));
 
     @Mock
     private DataBroker broker;
@@ -79,10 +83,10 @@ public class NetconfDeviceTopologyAdapterTest {
     @Mock
     private NetconfNode data;
 
-    private final String txIdent = "test transaction";
+    private String txIdent = "test transaction";
 
     private SchemaContext schemaContext = null;
-    private final String sessionIdForReporting = "netconf-test-session1";
+    private String sessionIdForReporting = "netconf-test-session1";
 
     private BindingTransactionChain transactionChain;
 
@@ -102,10 +106,7 @@ public class NetconfDeviceTopologyAdapterTest {
 
         doReturn(txIdent).when(writeTx).getIdentifier();
 
-        this.schemaContext = YangParserTestUtils.parseYangResources(NetconfDeviceTopologyAdapterTest.class,
-            "/schemas/network-topology@2013-10-21.yang", "/schemas/ietf-inet-types@2013-07-15.yang",
-            "/schemas/yang-ext.yang", "/schemas/netconf-node-topology.yang",
-            "/schemas/network-topology-augment-test@2016-08-08.yang");
+        this.schemaContext = YangParserTestUtils.parseYangStreams(getYangSchemas());
         schemaContext.getModules();
         final SchemaService schemaService = createSchemaService();
 
@@ -117,7 +118,7 @@ public class NetconfDeviceTopologyAdapterTest {
         datastores.put(LogicalDatastoreType.OPERATIONAL, operStore);
 
         ExecutorService listenableFutureExecutor = SpecialExecutors.newBlockingBoundedCachedThreadPool(
-                16, 16, "CommitFutures", NetconfDeviceTopologyAdapterTest.class);
+                16, 16, "CommitFutures");
 
         concurrentDOMDataBroker = new ConcurrentDOMDataBroker(datastores, listenableFutureExecutor);
 
@@ -136,13 +137,13 @@ public class NetconfDeviceTopologyAdapterTest {
 
         transactionChain = dataBroker.createTransactionChain(new TransactionChainListener() {
             @Override
-            public void onTransactionChainFailed(final TransactionChain<?, ?> chain,
-                    final AsyncTransaction<?, ?> transaction, final Throwable cause) {
+            public void onTransactionChainFailed(TransactionChain<?, ?> chain, AsyncTransaction<?, ?> transaction,
+                                                 Throwable cause) {
 
             }
 
             @Override
-            public void onTransactionChainSuccessful(final TransactionChain<?, ?> chain) {
+            public void onTransactionChainSuccessful(TransactionChain<?, ?> chain) {
 
             }
         });
@@ -208,9 +209,9 @@ public class NetconfDeviceTopologyAdapterTest {
         NormalizedNode<?, ?> augmentNode = ImmutableLeafNodeBuilder.create().withValue(dataTestId)
                 .withNodeIdentifier(new YangInstanceIdentifier.NodeIdentifier(netconfTestLeafQname)).build();
 
-        DOMDataWriteTransaction wtx =  concurrentDOMDataBroker.newWriteOnlyTransaction();
-        wtx.put(LogicalDatastoreType.OPERATIONAL, pathToAugmentedLeaf, augmentNode);
-        wtx.submit();
+        DOMDataWriteTransaction writeTx =  concurrentDOMDataBroker.newWriteOnlyTransaction();
+        writeTx.put(LogicalDatastoreType.OPERATIONAL, pathToAugmentedLeaf, augmentNode);
+        writeTx.submit();
 
         adapter.updateDeviceData(true, new NetconfDeviceCapabilities());
         Optional<NormalizedNode<?, ?>> testNode = concurrentDOMDataBroker.newReadOnlyTransaction()
@@ -228,15 +229,29 @@ public class NetconfDeviceTopologyAdapterTest {
                 dataTestId, testNode.get().getValue());
     }
 
+    private List<InputStream> getYangSchemas() {
+        final List<String> schemaPaths = Arrays.asList("/schemas/network-topology@2013-10-21.yang",
+                "/schemas/ietf-inet-types@2013-07-15.yang", "/schemas/yang-ext.yang",
+                "/schemas/netconf-node-topology.yang", "/schemas/network-topology-augment-test@2016-08-08.yang");
+        final List<InputStream> schemas = new ArrayList<>();
+
+        for (String schemaPath : schemaPaths) {
+            InputStream resourceAsStream = getClass().getResourceAsStream(schemaPath);
+            schemas.add(resourceAsStream);
+        }
+
+        return schemas;
+    }
+
     private SchemaService createSchemaService() {
         return new SchemaService() {
 
             @Override
-            public void addModule(final Module module) {
+            public void addModule(Module module) {
             }
 
             @Override
-            public void removeModule(final Module module) {
+            public void removeModule(Module module) {
 
             }
 

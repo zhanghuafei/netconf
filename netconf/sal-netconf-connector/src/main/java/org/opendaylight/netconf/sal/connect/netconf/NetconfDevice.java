@@ -26,7 +26,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.stream.Collectors;
 import javax.annotation.concurrent.GuardedBy;
@@ -61,6 +60,7 @@ import org.opendaylight.yangtools.yang.model.repo.api.RevisionSourceIdentifier;
 import org.opendaylight.yangtools.yang.model.repo.api.SchemaContextFactory;
 import org.opendaylight.yangtools.yang.model.repo.api.SchemaRepository;
 import org.opendaylight.yangtools.yang.model.repo.api.SchemaResolutionException;
+import org.opendaylight.yangtools.yang.model.repo.api.SchemaSourceException;
 import org.opendaylight.yangtools.yang.model.repo.api.SchemaSourceRepresentation;
 import org.opendaylight.yangtools.yang.model.repo.api.SourceIdentifier;
 import org.opendaylight.yangtools.yang.model.repo.api.YangTextSchemaSource;
@@ -68,7 +68,7 @@ import org.opendaylight.yangtools.yang.model.repo.spi.PotentialSchemaSource;
 import org.opendaylight.yangtools.yang.model.repo.spi.SchemaSourceProvider;
 import org.opendaylight.yangtools.yang.model.repo.spi.SchemaSourceRegistration;
 import org.opendaylight.yangtools.yang.model.repo.spi.SchemaSourceRegistry;
-import org.opendaylight.yangtools.yang.parser.rfc7950.repo.ASTSchemaSource;
+import org.opendaylight.yangtools.yang.parser.util.ASTSchemaSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -431,7 +431,8 @@ public class NetconfDevice
         }
 
         private static SourceIdentifier toSourceId(final QName input) {
-            return RevisionSourceIdentifier.create(input.getLocalName(), input.getRevision());
+            return RevisionSourceIdentifier.create(input.getLocalName(),
+                Optional.fromNullable(input.getFormattedRevision()));
         }
     }
 
@@ -466,13 +467,15 @@ public class NetconfDevice
         }
 
         private Collection<SourceIdentifier> filterMissingSources(final Collection<SourceIdentifier> requiredSources) {
+
             return requiredSources.parallelStream().filter(sourceIdentifier -> {
+                boolean remove = false;
                 try {
-                    schemaRepository.getSchemaSource(sourceIdentifier, ASTSchemaSource.class).get();
-                    return false;
-                } catch (InterruptedException | ExecutionException e) {
-                    return true;
+                    schemaRepository.getSchemaSource(sourceIdentifier, ASTSchemaSource.class).checkedGet();
+                } catch (SchemaSourceException e) {
+                    remove = true;
                 }
+                return remove;
             }).collect(Collectors.toList());
         }
 
@@ -484,9 +487,9 @@ public class NetconfDevice
             while (!requiredSources.isEmpty()) {
                 LOG.trace("{}: Trying to build schema context from {}", id, requiredSources);
                 try {
-                    final ListenableFuture<SchemaContext> schemaBuilderFuture = schemaContextFactory
-                            .createSchemaContext(requiredSources);
-                    final SchemaContext result = schemaBuilderFuture.get();
+                    final CheckedFuture<SchemaContext, SchemaResolutionException> schemaBuilderFuture =
+                            schemaContextFactory.createSchemaContext(requiredSources);
+                    final SchemaContext result = schemaBuilderFuture.checkedGet();
                     LOG.debug("{}: Schema context built successfully from {}", id, requiredSources);
                     final Collection<QName> filteredQNames = Sets.difference(deviceSources.getRequiredSourcesQName(),
                             capabilities.getUnresolvedCapabilites().keySet());
@@ -503,24 +506,16 @@ public class NetconfDevice
 
                     handleSalInitializationSuccess(result, remoteSessionCapabilities, getDeviceSpecificRpc(result));
                     return;
-                } catch (final ExecutionException e) {
+                } catch (final SchemaResolutionException e) {
                     // schemaBuilderFuture.checkedGet() throws only SchemaResolutionException
                     // that might be wrapping a MissingSchemaSourceException so we need to look
                     // at the cause of the exception to make sure we don't misinterpret it.
-                    final Throwable cause = e.getCause();
-
-                    if (cause instanceof MissingSchemaSourceException) {
+                    if (e.getCause() instanceof MissingSchemaSourceException) {
                         requiredSources = handleMissingSchemaSourceException(
                                 requiredSources, (MissingSchemaSourceException) e.getCause());
                         continue;
                     }
-                    if (cause instanceof SchemaResolutionException) {
-                        requiredSources = handleSchemaResolutionException(requiredSources,
-                            (SchemaResolutionException) cause);
-                    } else {
-                        handleSalInitializationFailure(e, listener);
-                        return;
-                    }
+                    requiredSources = handleSchemaResolutionException(requiredSources, e);
                 } catch (final Exception e) {
                     // unknown error, fail
                     handleSalInitializationFailure(e, listener);
@@ -607,7 +602,12 @@ public class NetconfDevice
                     continue;
                 }
 
-                if (identifier.getRevision().equals(qname.getRevision())) {
+                final String rev = getNullableRev(identifier);
+                if (rev == null) {
+                    if (qname.getRevision() == null) {
+                        return qname;
+                    }
+                } else if (qname.getFormattedRevision().equals(rev)) {
                     return qname;
                 }
             }
@@ -616,6 +616,11 @@ public class NetconfDevice
             // return null since we cannot find the QName,
             // this capability will be removed from required sources and not reported as unresolved-capability
             return null;
+        }
+
+        private String getNullableRev(final SourceIdentifier identifier) {
+            final String rev = identifier.getRevision();
+            return rev == null || SourceIdentifier.NOT_PRESENT_FORMATTED_REVISION.equals(rev) ? null : rev;
         }
     }
 }

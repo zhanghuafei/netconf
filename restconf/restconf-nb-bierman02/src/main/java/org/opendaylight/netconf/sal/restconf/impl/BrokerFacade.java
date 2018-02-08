@@ -97,16 +97,14 @@ public class BrokerFacade {
     private DOMDataBroker domDataBroker;
     private DOMNotificationService domNotification;
 
-    BrokerFacade() {
-
-    }
+    private BrokerFacade() {}
 
     public void setRpcService(final DOMRpcService router) {
         this.rpcService = router;
     }
 
-    public void setDomNotificationService(final DOMNotificationService service) {
-        this.domNotification = service;
+    public void setDomNotificationService(final DOMNotificationService domNotification) {
+        this.domNotification = domNotification;
     }
 
     public static BrokerFacade getInstance() {
@@ -565,7 +563,7 @@ public class BrokerFacade {
                     throw new RestconfDocumentedException(
                             error.getMessage(),
                             ErrorType.TRANSPORT,
-                            ErrorTag.RESOURCE_DENIED_TRANSPORT, e);
+                            ErrorTag.RESOURCE_DENIED_TRANSPORT);
                 }
             }
             throw new RestconfDocumentedException("Error reading data.", e, e.getErrorList());
@@ -622,8 +620,8 @@ public class BrokerFacade {
                         ((ListSchemaNode) childSchema).getKeyDefinition());
                 builder.withChild(childBuilder.build());
             } else if (child instanceof LeafNode) {
-                final Object defaultVal = ((LeafSchemaNode) childSchema).getType().getDefaultValue().orElse(null);
-                final Object nodeVal = ((LeafNode<?>) child).getValue();
+                final String defaultVal = ((LeafSchemaNode) childSchema).getDefault();
+                final String nodeVal = ((LeafNode<String>) child).getValue();
                 final NormalizedNodeAttrBuilder<NodeIdentifier, Object, LeafNode<Object>> leafBuilder =
                         Builders.leafBuilder((LeafSchemaNode) childSchema);
                 if (keys.contains(child.getNodeType())) {
@@ -677,8 +675,8 @@ public class BrokerFacade {
                         ((ListSchemaNode) childSchema).getKeyDefinition());
                 builder.withChild(childBuilder.build());
             } else if (child instanceof LeafNode) {
-                final Object defaultVal = ((LeafSchemaNode) childSchema).getType().getDefaultValue().orElse(null);
-                final Object nodeVal = ((LeafNode<?>) child).getValue();
+                final String defaultVal = ((LeafSchemaNode) childSchema).getDefault();
+                final String nodeVal = ((LeafNode<String>) child).getValue();
                 final NormalizedNodeAttrBuilder<NodeIdentifier, Object, LeafNode<Object>> leafBuilder =
                         Builders.leafBuilder((LeafSchemaNode) childSchema);
                 if (trim) {

@@ -7,18 +7,13 @@
  */
 package org.opendaylight.netconf.sal.connect.netconf.schema;
 
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-
+import com.google.common.base.Optional;
 import com.google.common.io.ByteStreams;
-import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.CheckedFuture;
 import java.net.InetSocketAddress;
-import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Collections;
 import java.util.Map;
-import java.util.Optional;
-import java.util.concurrent.ExecutionException;
 import org.hamcrest.CoreMatchers;
 import org.junit.Assert;
 import org.junit.Before;
@@ -37,7 +32,7 @@ public class YangLibrarySchemaYangSourceProviderTest {
     @Before
     public void setUp() throws Exception {
         final URL url = getClass().getResource("/schemas/config-test-rpc.yang");
-        workingSid = RevisionSourceIdentifier.create("abc", Optional.empty());
+        workingSid = RevisionSourceIdentifier.create("abc", Optional.<String>absent());
         final Map<SourceIdentifier, URL> sourceIdentifierURLMap = Collections.singletonMap(workingSid, url);
         final RemoteDeviceId id = new RemoteDeviceId("id", new InetSocketAddress("localhost", 22));
         yangLibrarySchemaYangSourceProvider = new YangLibrarySchemaYangSourceProvider(id, sourceIdentifierURLMap);
@@ -45,27 +40,23 @@ public class YangLibrarySchemaYangSourceProviderTest {
 
     @Test
     public void testGetSource() throws Exception {
-        ListenableFuture<? extends YangTextSchemaSource> source = yangLibrarySchemaYangSourceProvider
-                .getSource(workingSid);
-        final String x = new String(ByteStreams.toByteArray(source.get().openStream()));
+        CheckedFuture<? extends YangTextSchemaSource, SchemaSourceException> source =
+                yangLibrarySchemaYangSourceProvider.getSource(workingSid);
+        final String x = new String(ByteStreams.toByteArray(source.checkedGet().openStream()));
         Assert.assertThat(x, CoreMatchers.containsString("module config-test-rpc"));
     }
 
-    @Test
-    public void testGetSourceFailure() throws InterruptedException, MalformedURLException {
+    @Test(expected = SchemaSourceException.class)
+    public void testGetSourceFailure() throws Exception {
         final URL url = new URL("http://non-existing-entity.yang");
         final Map<SourceIdentifier, URL> sourceIdentifierURLMap = Collections.singletonMap(workingSid, url);
         final RemoteDeviceId id = new RemoteDeviceId("id", new InetSocketAddress("localhost", 22));
         final YangLibrarySchemaYangSourceProvider failingYangLibrarySchemaYangSourceProvider =
                 new YangLibrarySchemaYangSourceProvider(id, sourceIdentifierURLMap);
 
-        try {
-            failingYangLibrarySchemaYangSourceProvider.getSource(workingSid).get();
-            fail();
-        } catch (ExecutionException e) {
-            final Throwable cause = e.getCause();
-            assertTrue(cause instanceof SchemaSourceException);
-        }
+        CheckedFuture<? extends YangTextSchemaSource, SchemaSourceException> source =
+                failingYangLibrarySchemaYangSourceProvider.getSource(workingSid);
+        source.checkedGet();
     }
 
     @Test(expected = IllegalArgumentException.class)

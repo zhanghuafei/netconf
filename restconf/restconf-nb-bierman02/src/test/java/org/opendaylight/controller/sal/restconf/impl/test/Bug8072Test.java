@@ -9,6 +9,7 @@ package org.opendaylight.controller.sal.restconf.impl.test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -45,7 +46,7 @@ public class Bug8072Test {
     @BeforeClass
     public static void init() throws FileNotFoundException, ReactorException {
         final SchemaContext globalContext = TestUtils.loadSchemaContext("/full-versions/yangs");
-        assertEquals(0, globalContext.findModules(EXTERNAL_MODULE_NAME).size());
+        assertNull(globalContext.findModuleByName(EXTERNAL_MODULE_NAME, null));
         final Set<Module> allModules = globalContext.getModules();
         assertNotNull(allModules);
         CONTROLLER_CONTEXT.setSchemas(globalContext);

@@ -9,9 +9,9 @@ package org.opendaylight.netconf.md.sal.rest.schema;
 
 import com.google.common.base.Splitter;
 import com.google.common.collect.Iterables;
-import java.time.format.DateTimeParseException;
+import java.text.ParseException;
+import java.util.Date;
 import java.util.Iterator;
-import org.opendaylight.mdsal.dom.api.DOMYangTextSourceProvider;
 import org.opendaylight.netconf.sal.restconf.impl.ControllerContext;
 import org.opendaylight.restconf.common.context.InstanceIdentifierContext;
 import org.opendaylight.restconf.common.errors.RestconfDocumentedException;
@@ -19,7 +19,7 @@ import org.opendaylight.restconf.common.errors.RestconfError.ErrorTag;
 import org.opendaylight.restconf.common.errors.RestconfError.ErrorType;
 import org.opendaylight.restconf.common.schema.SchemaExportContext;
 import org.opendaylight.restconf.common.validation.RestconfValidationUtils;
-import org.opendaylight.yangtools.yang.common.Revision;
+import org.opendaylight.yangtools.yang.common.SimpleDateFormatUtil;
 import org.opendaylight.yangtools.yang.model.api.Module;
 import org.opendaylight.yangtools.yang.model.api.SchemaContext;
 
@@ -67,19 +67,17 @@ public class SchemaRetrievalServiceImpl implements SchemaRetrievalService {
         RestconfValidationUtils.checkDocumentedError(componentIter.hasNext(),
                 ErrorType.PROTOCOL, ErrorTag.INVALID_VALUE, "Revision date must be supplied.");
         final String revisionString = componentIter.next();
-        return getExportUsingNameAndRevision(schemaContext, moduleName, revisionString,
-                salContext.getYangTextSourceProvider());
+        return getExportUsingNameAndRevision(schemaContext, moduleName, revisionString);
     }
 
     private static SchemaExportContext getExportUsingNameAndRevision(final SchemaContext schemaContext,
-             final String moduleName, final String revisionStr,
-             final DOMYangTextSourceProvider yangTextSourceProvider) {
+            final String moduleName, final String revisionStr) {
         try {
-            final Module module = schemaContext.findModule(moduleName, Revision.of(revisionStr)).orElse(null);
+            final Date revision = SimpleDateFormatUtil.getRevisionFormat().parse(revisionStr);
+            final Module module = schemaContext.findModuleByName(moduleName, revision);
             return new SchemaExportContext(
-                    schemaContext, RestconfValidationUtils.checkNotNullDocumented(module, moduleName),
-                    yangTextSourceProvider);
-        } catch (final DateTimeParseException e) {
+                    schemaContext, RestconfValidationUtils.checkNotNullDocumented(module, moduleName));
+        } catch (final ParseException e) {
             throw new RestconfDocumentedException("Supplied revision is not in expected date format YYYY-mm-dd", e);
         }
     }

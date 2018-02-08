@@ -55,7 +55,7 @@ public class DefaultCloseSession extends AbstractSingletonNetconfOperation imple
             LOG.info("Session {} closing", session.getSessionId());
         } catch (final Exception e) {
             throw new DocumentedException("Unable to properly close session "
-                    + getNetconfSessionIdForReporting(), e, DocumentedException.ErrorType.APPLICATION,
+                    + getNetconfSessionIdForReporting(), DocumentedException.ErrorType.APPLICATION,
                     DocumentedException.ErrorTag.OPERATION_FAILED,
                     DocumentedException.ErrorSeverity.ERROR, Collections.singletonMap(
                     DocumentedException.ErrorSeverity.ERROR.toString(), e.getMessage()));

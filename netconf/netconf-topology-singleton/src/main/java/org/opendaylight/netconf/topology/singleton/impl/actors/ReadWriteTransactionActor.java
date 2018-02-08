@@ -18,7 +18,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import scala.concurrent.duration.Duration;
 
-public final class ReadWriteTransactionActor extends UntypedActor {
+public class ReadWriteTransactionActor extends UntypedActor {
 
     private static final Logger LOG = LoggerFactory.getLogger(ReadWriteTransactionActor.class);
 

@@ -7,14 +7,10 @@
  */
 package org.opendaylight.restconf.nb.rfc8040.services.simple.impl;
 
-import com.google.common.collect.ImmutableList;
-import java.util.Collection;
 import java.util.List;
-import java.util.Optional;
 import org.opendaylight.yangtools.yang.common.QName;
+import org.opendaylight.yangtools.yang.model.api.ConstraintDefinition;
 import org.opendaylight.yangtools.yang.model.api.LeafSchemaNode;
-import org.opendaylight.yangtools.yang.model.api.MustDefinition;
-import org.opendaylight.yangtools.yang.model.api.RevisionAwareXPath;
 import org.opendaylight.yangtools.yang.model.api.SchemaPath;
 import org.opendaylight.yangtools.yang.model.api.Status;
 import org.opendaylight.yangtools.yang.model.api.TypeDefinition;
@@ -56,6 +52,11 @@ final class FakeLeafSchemaNode implements LeafSchemaNode {
     }
 
     @Override
+    public ConstraintDefinition getConstraints() {
+        throw new UnsupportedOperationException("Not supported.");
+    }
+
+    @Override
     public QName getQName() {
         return path.getLastComponent();
     }
@@ -71,12 +72,12 @@ final class FakeLeafSchemaNode implements LeafSchemaNode {
     }
 
     @Override
-    public Optional<String> getDescription() {
+    public String getDescription() {
         throw new UnsupportedOperationException("Not supported operations.");
     }
 
     @Override
-    public Optional<String> getReference() {
+    public String getReference() {
         throw new UnsupportedOperationException("Not supported.");
     }
 
@@ -91,17 +92,13 @@ final class FakeLeafSchemaNode implements LeafSchemaNode {
     }
 
     @Override
-    public Optional<RevisionAwareXPath> getWhenCondition() {
-        return Optional.empty();
-    }
-
-    @Override
-    public boolean isMandatory() {
+    public String getDefault() {
         throw new UnsupportedOperationException("Not supported.");
     }
 
     @Override
-    public Collection<MustDefinition> getMustConstraints() {
-        return ImmutableList.of();
+    public String getUnits() {
+        throw new UnsupportedOperationException("Not supported.");
     }
+
 }

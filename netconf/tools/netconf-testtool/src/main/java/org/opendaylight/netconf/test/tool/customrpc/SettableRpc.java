@@ -58,7 +58,7 @@ class SettableRpc implements NetconfOperation {
         }
     }
 
-    private static void checkForError(final Document document) throws DocumentedException {
+    private void checkForError(final Document document) throws DocumentedException {
         final XmlElement rpcReply = XmlElement.fromDomDocument(document);
         if (rpcReply.getOnlyChildElementOptionally("rpc-error").isPresent()) {
             throw DocumentedException.fromXMLDocument(document);

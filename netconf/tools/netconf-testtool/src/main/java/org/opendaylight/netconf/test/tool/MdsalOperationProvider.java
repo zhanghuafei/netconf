@@ -69,7 +69,7 @@ class MdsalOperationProvider implements NetconfOperationServiceFactory {
 
     private final Set<Capability> caps;
     private final SchemaContext schemaContext;
-    private final SchemaSourceProvider<YangTextSchemaSource> sourceProvider;
+    private SchemaSourceProvider<YangTextSchemaSource> sourceProvider;
 
     MdsalOperationProvider(final SessionIdProvider idProvider,
                            final Set<Capability> caps,
@@ -87,14 +87,17 @@ class MdsalOperationProvider implements NetconfOperationServiceFactory {
 
     @Override
     public AutoCloseable registerCapabilityListener(
-            final CapabilityListener listener) {
+            CapabilityListener listener) {
         listener.onCapabilitiesChanged(caps, Collections.<Capability>emptySet());
-        return () -> {
+        return new AutoCloseable() {
+            @Override
+            public void close() throws Exception {
+            }
         };
     }
 
     @Override
-    public NetconfOperationService createService(final String netconfSessionIdForReporting) {
+    public NetconfOperationService createService(String netconfSessionIdForReporting) {
         return new MdsalOperationService(Long.parseLong(netconfSessionIdForReporting), schemaContext,
             caps, sourceProvider);
     }
@@ -105,7 +108,7 @@ class MdsalOperationProvider implements NetconfOperationServiceFactory {
         private final Set<Capability> caps;
         private final SchemaService schemaService;
         private final DOMDataBroker dataBroker;
-        private final SchemaSourceProvider<YangTextSchemaSource> sourceProvider;
+        private SchemaSourceProvider<YangTextSchemaSource> sourceProvider;
 
         MdsalOperationService(final long currentSessionId,
                               final SchemaContext schemaContext,
@@ -204,11 +207,11 @@ class MdsalOperationProvider implements NetconfOperationServiceFactory {
 
             ContainerNode schemasContainer = Builders.containerBuilder().withNodeIdentifier(
                     new YangInstanceIdentifier.NodeIdentifier(Schemas.QNAME)).withChild(schemaList).build();
-            return Builders.containerBuilder().withNodeIdentifier(
+            return (ContainerNode) Builders.containerBuilder().withNodeIdentifier(
                     new YangInstanceIdentifier.NodeIdentifier(NetconfState.QNAME)).withChild(schemasContainer).build();
         }
 
-        private static DOMDataBroker createDataStore(final SchemaService schemaService, final long sessionId) {
+        private DOMDataBroker createDataStore(SchemaService schemaService, long sessionId) {
             LOG.debug("Session {}: Creating data stores for simulated device", sessionId);
             final DOMStore operStore = InMemoryDOMDataStoreFactory
                     .create("DOM-OPER", schemaService);
@@ -216,7 +219,7 @@ class MdsalOperationProvider implements NetconfOperationServiceFactory {
                     .create("DOM-CFG", schemaService);
 
             ExecutorService listenableFutureExecutor = SpecialExecutors.newBlockingBoundedCachedThreadPool(
-                    16, 16, "CommitFutures", MdsalOperationProvider.class);
+                    16, 16, "CommitFutures");
 
             final EnumMap<LogicalDatastoreType, DOMStore> datastores = new EnumMap<>(LogicalDatastoreType.class);
             datastores.put(LogicalDatastoreType.CONFIGURATION, configStore);
@@ -229,11 +232,11 @@ class MdsalOperationProvider implements NetconfOperationServiceFactory {
             return new SchemaService() {
 
                 @Override
-                public void addModule(final Module module) {
+                public void addModule(Module module) {
                 }
 
                 @Override
-                public void removeModule(final Module module) {
+                public void removeModule(Module module) {
 
                 }
 

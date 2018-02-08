@@ -14,6 +14,10 @@ import static org.junit.Assert.assertTrue;
 import static org.opendaylight.netconf.sal.connect.netconf.util.NetconfMessageTransformUtil.toId;
 import static org.opendaylight.netconf.sal.connect.netconf.util.NetconfMessageTransformUtil.toPath;
 
+import com.google.common.collect.Lists;
+import java.io.InputStream;
+import java.util.Collections;
+import java.util.List;
 import java.util.Set;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -52,13 +56,16 @@ public class NetconfToRpcRequestTest {
     static NetconfMessageTransformer messageTransformer;
 
     @BeforeClass
-    public static void setup() {
-        final Set<Module> notifModules = YangParserTestUtils.parseYangResource(
-            "/schemas/rpc-notification-subscription.yang").getModules();
+    public static void setup() throws Exception {
+        List<InputStream> modelsToParse = Collections.singletonList(
+                NetconfToRpcRequestTest.class.getResourceAsStream("/schemas/rpc-notification-subscription.yang"));
+        final Set<Module> notifModules = YangParserTestUtils.parseYangStreams(modelsToParse).getModules();
         assertTrue(!notifModules.isEmpty());
 
-        cfgCtx = YangParserTestUtils.parseYangResources(NetconfToRpcRequestTest.class,
-            "/schemas/config-test-rpc.yang", "/schemas/rpc-notification-subscription.yang");
+        modelsToParse = Lists.newArrayList(
+                NetconfToRpcRequestTest.class.getResourceAsStream("/schemas/config-test-rpc.yang"),
+                NetconfToRpcRequestTest.class.getResourceAsStream("/schemas/rpc-notification-subscription.yang"));
+        cfgCtx = YangParserTestUtils.parseYangStreams(modelsToParse);
         messageTransformer = new NetconfMessageTransformer(cfgCtx, true);
     }
 

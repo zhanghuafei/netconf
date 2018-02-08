@@ -115,24 +115,21 @@ public class SchemaServiceToMdsalWriter implements SchemaContextListener, AutoCl
 
         // TODO Conformance type is always set to Implement value, but it should it really be like this?
         // TODO Add also deviations and features lists to module entries
-        moduleBuilder.setName(new YangIdentifier(module.getName()));
-
-        module.getQNameModule().getRevision().ifPresent(rev -> moduleBuilder.setRevision(
-            new OptionalRevision(rev.toString())));
-
-        return moduleBuilder.setNamespace(new Uri(module.getNamespace().toString()))
+        moduleBuilder.setName(new YangIdentifier(module.getName()))
+                .setRevision(new OptionalRevision(module.getQNameModule().getFormattedRevision()))
+                .setNamespace(new Uri(module.getNamespace().toString()))
                 .setConformanceType(ConformanceType.Implement)
-                .setSubmodules(createSubmodulesForModule(module))
-                .build();
+                .setSubmodules(createSubmodulesForModule(module));
+
+        return moduleBuilder.build();
     }
 
-    private static Submodules createSubmodulesForModule(final Module module) {
+    private Submodules createSubmodulesForModule(final Module module) {
         final List<Submodule> submodulesList = Lists.newArrayList();
         for (final Module subModule : module.getSubmodules()) {
-            final SubmoduleBuilder subModuleEntryBuilder = new SubmoduleBuilder()
-                    .setName(new YangIdentifier(subModule.getName()));
-            subModule.getQNameModule().getRevision().ifPresent(
-                rev -> subModuleEntryBuilder.setRevision(new OptionalRevision(rev.toString())));
+            final SubmoduleBuilder subModuleEntryBuilder = new SubmoduleBuilder();
+            subModuleEntryBuilder.setName(new YangIdentifier(subModule.getName()))
+                    .setRevision(new OptionalRevision(subModule.getQNameModule().getFormattedRevision()));
             submodulesList.add(subModuleEntryBuilder.build());
         }
 

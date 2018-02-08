@@ -22,6 +22,8 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.EventLoop;
 import io.netty.util.concurrent.GenericFutureListener;
 import org.junit.Test;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 import org.opendaylight.controller.config.util.xml.DocumentedException;
 import org.opendaylight.controller.config.util.xml.XmlElement;
 import org.opendaylight.controller.config.util.xml.XmlUtil;
@@ -35,14 +37,17 @@ import org.w3c.dom.Document;
 
 public class DefaultCloseSessionTest {
 
-    private static void mockEventLoop(final Channel channel) {
+    private void mockEventLoop(final Channel channel) {
         final EventLoop eventLoop = mock(EventLoop.class);
         doReturn(eventLoop).when(channel).eventLoop();
-        doAnswer(invocation -> {
-            final Object[] args = invocation.getArguments();
-            final Runnable runnable = (Runnable) args[0];
-            runnable.run();
-            return null;
+        doAnswer(new Answer<Void>() {
+            @Override
+            public Void answer(InvocationOnMock invocation) throws Throwable {
+                final Object[] args = invocation.getArguments();
+                final Runnable runnable = (Runnable) args[0];
+                runnable.run();
+                return null;
+            }
         }).when(eventLoop).execute(any(Runnable.class));
         doReturn(true).when(eventLoop).inEventLoop();
     }
@@ -62,9 +67,12 @@ public class DefaultCloseSessionTest {
         doReturn(channelFuture).when(channelFuture).addListener(any(GenericFutureListener.class));
 
         final ChannelFuture sendFuture = mock(ChannelFuture.class);
-        doAnswer(invocation -> {
-            ((GenericFutureListener) invocation.getArguments()[0]).operationComplete(sendFuture);
-            return null;
+        doAnswer(new Answer<Object>() {
+            @Override
+            public Object answer(final InvocationOnMock invocation) throws Throwable {
+                ((GenericFutureListener) invocation.getArguments()[0]).operationComplete(sendFuture);
+                return null;
+            }
         }).when(sendFuture).addListener(any(GenericFutureListener.class));
         doReturn(sendFuture).when(channel).writeAndFlush(anyObject());
         doReturn(true).when(sendFuture).isSuccess();

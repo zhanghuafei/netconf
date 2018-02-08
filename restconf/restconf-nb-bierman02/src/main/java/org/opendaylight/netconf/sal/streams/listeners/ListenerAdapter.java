@@ -7,6 +7,7 @@
  */
 package org.opendaylight.netconf.sal.streams.listeners;
 
+import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import java.io.IOException;
 import java.util.Collection;
@@ -51,7 +52,7 @@ public class ListenerAdapter extends AbstractCommonSubscriber implements Cluster
     private final String streamName;
     private final NotificationOutputType outputType;
 
-    private Collection<DataTreeCandidate> candidates;
+    private Collection<DataTreeCandidate> dataTreeCandidates;
 
     /**
      * Creates new {@link ListenerAdapter} listener specified by path and stream
@@ -69,13 +70,13 @@ public class ListenerAdapter extends AbstractCommonSubscriber implements Cluster
         register(this);
         this.outputType = Preconditions.checkNotNull(outputType);
         this.path = Preconditions.checkNotNull(path);
-        Preconditions.checkArgument(streamName != null && !streamName.isEmpty());
+        Preconditions.checkArgument((streamName != null) && !streamName.isEmpty());
         this.streamName = streamName;
     }
 
     @Override
-    public void onDataTreeChanged(@Nonnull final Collection<DataTreeCandidate> dataTreeCandidates) {
-        this.candidates = dataTreeCandidates;
+    public void onDataTreeChanged(@Nonnull Collection<DataTreeCandidate> dataTreeCandidates) {
+        this.dataTreeCandidates = dataTreeCandidates;
         final String xml = prepareXml();
         if (checkQueryParams(xml, this)) {
             prepareAndPostData(xml);
@@ -140,7 +141,7 @@ public class ListenerAdapter extends AbstractCommonSubscriber implements Cluster
                 "urn:opendaylight:params:xml:ns:yang:controller:md:sal:remote", "data-changed-notification");
 
         addValuesToDataChangedNotificationEventElement(doc, dataChangedNotificationEventElement,
-                                                            this.candidates, schemaContext, dataContextTree);
+                                                            this.dataTreeCandidates, schemaContext, dataContextTree);
         notificationElement.appendChild(dataChangedNotificationEventElement);
         return transformDoc(doc);
     }
@@ -172,11 +173,11 @@ public class ListenerAdapter extends AbstractCommonSubscriber implements Cluster
     }
 
     private void addNodeToDataChangeNotificationEventElement(final Document doc,
-            final Element dataChangedNotificationEventElement, final DataTreeCandidateNode candidateNode,
-            final YangInstanceIdentifier parentYiid, final SchemaContext schemaContext,
-            final DataSchemaContextTree dataSchemaContextTree) {
+                             final Element dataChangedNotificationEventElement, DataTreeCandidateNode candidateNode,
+                             YangInstanceIdentifier parentYiid, SchemaContext schemaContext,
+                             DataSchemaContextTree dataSchemaContextTree) {
 
-        java.util.Optional<NormalizedNode<?,?>> optionalNormalizedNode = java.util.Optional.empty();
+        Optional<NormalizedNode<?,?>> optionalNormalizedNode = Optional.absent();
         switch (candidateNode.getModificationType()) {
             case APPEARED:
             case SUBTREE_MODIFIED:
@@ -243,7 +244,7 @@ public class ListenerAdapter extends AbstractCommonSubscriber implements Cluster
      *            {@link Operation}
      * @return {@link Node} node represented by changed event element.
      */
-    private static Node createDataChangeEventElement(final Document doc, final YangInstanceIdentifier path,
+    private Node createDataChangeEventElement(final Document doc, final YangInstanceIdentifier path,
             final Operation operation) {
         final Element dataChangeEventElement = doc.createElement("data-change-event");
         final Element pathElement = doc.createElement("path");
@@ -258,11 +259,11 @@ public class ListenerAdapter extends AbstractCommonSubscriber implements Cluster
     }
 
     private Node createCreatedChangedDataChangeEventElement(final Document doc,
-            final YangInstanceIdentifier eventPath, final NormalizedNode normalized, final Operation operation,
+            YangInstanceIdentifier path, NormalizedNode normalized, final Operation operation,
             final SchemaContext schemaContext, final DataSchemaContextTree dataSchemaContextTree) {
         final Element dataChangeEventElement = doc.createElement("data-change-event");
         final Element pathElement = doc.createElement("path");
-        addPathAsValueToElement(eventPath, pathElement);
+        addPathAsValueToElement(path, pathElement);
         dataChangeEventElement.appendChild(pathElement);
 
         final Element operationElement = doc.createElement("operation");
@@ -271,10 +272,10 @@ public class ListenerAdapter extends AbstractCommonSubscriber implements Cluster
 
         try {
             SchemaPath nodePath;
-            if (normalized instanceof MapEntryNode || normalized instanceof UnkeyedListEntryNode) {
-                nodePath = dataSchemaContextTree.getChild(eventPath).getDataSchemaNode().getPath();
+            if ((normalized instanceof MapEntryNode) || (normalized instanceof UnkeyedListEntryNode)) {
+                nodePath = dataSchemaContextTree.getChild(path).getDataSchemaNode().getPath();
             } else {
-                nodePath = dataSchemaContextTree.getChild(eventPath).getDataSchemaNode().getPath().getParent();
+                nodePath = dataSchemaContextTree.getChild(path).getDataSchemaNode().getPath().getParent();
             }
             final DOMResult domResult = writeNormalizedNode(normalized, schemaContext, nodePath);
             final Node result = doc.importNode(domResult.getNode().getFirstChild(), true);
@@ -299,7 +300,7 @@ public class ListenerAdapter extends AbstractCommonSubscriber implements Cluster
      *            {@link Element}
      */
     @SuppressWarnings("rawtypes")
-    private static void addPathAsValueToElement(final YangInstanceIdentifier path, final Element element) {
+    private void addPathAsValueToElement(final YangInstanceIdentifier path, final Element element) {
         final YangInstanceIdentifier normalizedPath = ControllerContext.getInstance().toXpathRepresentation(path);
         final StringBuilder textContent = new StringBuilder();
 
@@ -342,8 +343,8 @@ public class ListenerAdapter extends AbstractCommonSubscriber implements Cluster
      */
     private static void writeIdentifierWithNamespacePrefix(final Element element, final StringBuilder textContent,
             final QName qualifiedName) {
-        final Module module = ControllerContext.getInstance().getGlobalSchema().findModule(qualifiedName.getModule())
-                .get();
+        final Module module = ControllerContext.getInstance().getGlobalSchema()
+                .findModuleByNamespaceAndRevision(qualifiedName.getNamespace(), qualifiedName.getRevision());
 
         textContent.append(module.getName());
         textContent.append(":");

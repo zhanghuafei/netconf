@@ -18,7 +18,6 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.UriInfo;
 import org.opendaylight.restconf.common.context.NormalizedNodeContext;
 import org.opendaylight.restconf.nb.rfc8040.Rfc8040;
-import org.opendaylight.restconf.nb.rfc8040.services.simple.api.UpdateHandlers;
 import org.opendaylight.restconf.nb.rfc8040.utils.RestconfConstants;
 
 /**
@@ -26,7 +25,7 @@ import org.opendaylight.restconf.nb.rfc8040.utils.RestconfConstants;
  * "rpc" statement. It is invoked using a POST method on the operation resource.
  *
  */
-public interface RestconfInvokeOperationsService extends UpdateHandlers {
+public interface RestconfInvokeOperationsService {
 
     /**
      * Invoke RPC operation.

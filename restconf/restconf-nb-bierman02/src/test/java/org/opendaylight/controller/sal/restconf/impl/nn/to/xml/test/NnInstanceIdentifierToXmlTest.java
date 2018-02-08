@@ -153,6 +153,7 @@ public class NnInstanceIdentifierToXmlTest extends AbstractBodyReaderTest {
     public void nnAsYangInstanceIdentifierAugment() throws Exception {
 
         final NormalizedNodeContext normalizedNodeContext = preparNNC();
+        final NormalizedNodeXmlBodyWriter xmlBodyWriter = new NormalizedNodeXmlBodyWriter();
         final OutputStream output = new ByteArrayOutputStream();
 
         xmlBodyWriter.writeTo(normalizedNodeContext, null, null, null,

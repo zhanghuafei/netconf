@@ -223,9 +223,9 @@ class NetconfCapabilityMonitoringService implements CapabilityListener, AutoClos
         }
     }
 
-    private void notifyCapabilityChanged(final Capabilities newCapabilities) {
+    private void notifyCapabilityChanged(final Capabilities capabilities) {
         for (NetconfMonitoringService.CapabilitiesListener listener : listeners) {
-            listener.onCapabilitiesChanged(newCapabilities);
+            listener.onCapabilitiesChanged(capabilities);
             listener.onSchemasChanged(getSchemas());
         }
     }

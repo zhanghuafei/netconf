@@ -7,7 +7,7 @@
  */
 package org.opendaylight.controller.sal.restconf.impl.test;
 
-public final class RestOperationUtils {
+public class RestOperationUtils {
 
     public static final String JSON = "+json";
     public static final String XML = "+xml";

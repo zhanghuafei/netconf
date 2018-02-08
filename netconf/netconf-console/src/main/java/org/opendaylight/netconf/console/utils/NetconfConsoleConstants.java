@@ -8,7 +8,7 @@
 
 package org.opendaylight.netconf.console.utils;
 
-public final class NetconfConsoleConstants {
+public class NetconfConsoleConstants {
 
     private NetconfConsoleConstants() {
         throw new IllegalStateException("Instantiating utility class.");

@@ -7,7 +7,6 @@
  */
 package org.opendaylight.restconf.nb.rfc8040.services.simple.impl;
 
-import javax.ws.rs.Path;
 import org.opendaylight.restconf.common.context.InstanceIdentifierContext;
 import org.opendaylight.restconf.common.context.NormalizedNodeContext;
 import org.opendaylight.restconf.nb.rfc8040.Rfc8040.IetfYangLibrary;
@@ -24,10 +23,9 @@ import org.opendaylight.yangtools.yang.model.api.LeafSchemaNode;
 import org.opendaylight.yangtools.yang.model.api.SchemaContext;
 import org.opendaylight.yangtools.yang.model.api.SchemaNode;
 
-@Path("/")
 public class RestconfImpl implements RestconfService {
 
-    private SchemaContextHandler schemaContextHandler;
+    private final SchemaContextHandler schemaContextHandler;
 
     public RestconfImpl(final SchemaContextHandler schemaContextHandler) {
         this.schemaContextHandler = schemaContextHandler;
@@ -38,7 +36,7 @@ public class RestconfImpl implements RestconfService {
         final SchemaContext context = this.schemaContextHandler.get();
         SchemaNode schemaNode = null;
         for (final GroupingDefinition groupingDefinition : context
-                .findModule(RestconfModule.IETF_RESTCONF_QNAME.getModule()).get().getGroupings()) {
+                .findModuleByNamespaceAndRevision(RestconfModule.URI_MODULE, RestconfModule.DATE).getGroupings()) {
             if (groupingDefinition.getQName().equals(RestconfModule.RESTCONF_GROUPING_QNAME)) {
                 schemaNode = ((ContainerSchemaNode) groupingDefinition
                         .getDataChildByName(RestconfModule.RESTCONF_CONTAINER_QNAME))
@@ -46,20 +44,11 @@ public class RestconfImpl implements RestconfService {
             }
         }
         final YangInstanceIdentifier yangIId = YangInstanceIdentifier.of(
-                QName.create(RestconfModule.IETF_RESTCONF_QNAME, RestconfModule.LIB_VER_LEAF_SCHEMA_NODE));
+                QName.create(RestconfModule.NAME, RestconfModule.REVISION, RestconfModule.LIB_VER_LEAF_SCHEMA_NODE));
         final InstanceIdentifierContext<? extends SchemaNode> iid =
-                new InstanceIdentifierContext<>(yangIId, schemaNode, null, context);
+                new InstanceIdentifierContext<SchemaNode>(yangIId, schemaNode, null, context);
         final NormalizedNode<?, ?> data =
                 Builders.leafBuilder((LeafSchemaNode) schemaNode).withValue(IetfYangLibrary.REVISION).build();
         return new NormalizedNodeContext(iid, data);
-    }
-
-    @Override
-    public synchronized void updateHandlers(final Object... handlers) {
-        for (final Object object : handlers) {
-            if (object instanceof SchemaContextHandler) {
-                schemaContextHandler = (SchemaContextHandler) object;
-            }
-        }
     }
 }

@@ -66,7 +66,6 @@ public final class BufferedWriter extends Writer {
     }
 
     @Override
-    @SuppressWarnings("checkstyle:hiddenField")
     public void write(final char[] buffer, final int offset, final int length) throws IOException {
         if ((offset < 0) || (offset > buffer.length)
                 || (length < 0) || ((offset + length) > buffer.length) || ((offset + length) < 0)) {

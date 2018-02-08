@@ -20,9 +20,12 @@ import com.google.common.base.Preconditions;
 import com.google.common.io.ByteSource;
 import com.google.common.util.concurrent.CheckedFuture;
 import com.google.common.util.concurrent.Futures;
+import java.io.InputStream;
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import org.custommonkey.xmlunit.DetailedDiff;
@@ -85,7 +88,7 @@ public class RuntimeRpcTest {
         return doc;
     }
 
-    private static final DOMRpcService RPC_SERVICE_VOID_INVOKER = new DOMRpcService() {
+    private final DOMRpcService rpcServiceVoidInvoke = new DOMRpcService() {
         @Nonnull
         @Override
         public CheckedFuture<DOMRpcResult, DOMRpcException> invokeRpc(
@@ -101,7 +104,7 @@ public class RuntimeRpcTest {
         }
     };
 
-    private static final DOMRpcService RPC_SERVICE_FAILED_INVOCATION = new DOMRpcService() {
+    private final DOMRpcService rpcServiceFailedInvocation = new DOMRpcService() {
         @Nonnull
         @Override
         public CheckedFuture<DOMRpcResult, DOMRpcException> invokeRpc(
@@ -119,14 +122,15 @@ public class RuntimeRpcTest {
         }
     };
 
-    private final DOMRpcService rpcServiceSuccessfulInvocation = new DOMRpcService() {
+    private final DOMRpcService rpcServiceSuccesfullInvocation = new DOMRpcService() {
         @Nonnull
         @Override
         public CheckedFuture<DOMRpcResult, DOMRpcException> invokeRpc(
                 @Nonnull final SchemaPath type, @Nullable final NormalizedNode<?, ?> input) {
             final Collection<DataContainerChild<? extends PathArgument, ?>> children =
                     (Collection<DataContainerChild<? extends PathArgument, ?>>) input.getValue();
-            final Module module = schemaContext.findModule(type.getLastComponent().getNamespace()).orElse(null);
+            final Module module = schemaContext.findModuleByNamespaceAndRevision(
+                type.getLastComponent().getNamespace(), null);
             final RpcDefinition rpcDefinition = getRpcDefinitionFromModule(
                 module, module.getNamespace(), type.getLastComponent().getLocalName());
             final ContainerSchemaNode outputSchemaNode = rpcDefinition.getOutput();
@@ -140,7 +144,7 @@ public class RuntimeRpcTest {
         @Nonnull
         @Override
         public <T extends DOMRpcAvailabilityListener> ListenerRegistration<T> registerRpcListener(
-                @Nonnull final T lsnr) {
+                @Nonnull final T listener) {
             return null;
         }
     };
@@ -182,13 +186,13 @@ public class RuntimeRpcTest {
 
         }).when(sourceProvider).getSource(any(SourceIdentifier.class));
 
-        this.schemaContext = YangParserTestUtils.parseYangResource("/yang/mdsal-netconf-rpc-test.yang");
+        this.schemaContext = YangParserTestUtils.parseYangStreams(getYangSchemas());
         this.currentSchemaContext = new CurrentSchemaContext(schemaService, sourceProvider);
     }
 
     @Test
     public void testVoidOutputRpc() throws Exception {
-        final RuntimeRpc rpc = new RuntimeRpc(SESSION_ID_FOR_REPORTING, currentSchemaContext, RPC_SERVICE_VOID_INVOKER);
+        final RuntimeRpc rpc = new RuntimeRpc(SESSION_ID_FOR_REPORTING, currentSchemaContext, rpcServiceVoidInvoke);
 
         final Document rpcDocument = XmlFileLoader.xmlFileToDocument("messages/mapping/rpcs/rpc-void-output.xml");
         final HandlingPriority priority = rpc.canHandle(rpcDocument);
@@ -202,7 +206,7 @@ public class RuntimeRpcTest {
     @Test
     public void testSuccesfullNonVoidInvocation() throws Exception {
         final RuntimeRpc rpc = new RuntimeRpc(
-            SESSION_ID_FOR_REPORTING, currentSchemaContext, rpcServiceSuccessfulInvocation);
+            SESSION_ID_FOR_REPORTING, currentSchemaContext, rpcServiceSuccesfullInvocation);
 
         final Document rpcDocument = XmlFileLoader.xmlFileToDocument("messages/mapping/rpcs/rpc-nonvoid.xml");
         final HandlingPriority priority = rpc.canHandle(rpcDocument);
@@ -215,7 +219,7 @@ public class RuntimeRpcTest {
     @Test
     public void testSuccesfullContainerInvocation() throws Exception {
         final RuntimeRpc rpc = new RuntimeRpc(
-            SESSION_ID_FOR_REPORTING, currentSchemaContext, rpcServiceSuccessfulInvocation);
+            SESSION_ID_FOR_REPORTING, currentSchemaContext, rpcServiceSuccesfullInvocation);
 
         final Document rpcDocument = XmlFileLoader.xmlFileToDocument("messages/mapping/rpcs/rpc-container.xml");
         final HandlingPriority priority = rpc.canHandle(rpcDocument);
@@ -228,7 +232,7 @@ public class RuntimeRpcTest {
     @Test
     public void testFailedInvocation() throws Exception {
         final RuntimeRpc rpc = new RuntimeRpc(
-            SESSION_ID_FOR_REPORTING, currentSchemaContext, RPC_SERVICE_FAILED_INVOCATION);
+            SESSION_ID_FOR_REPORTING, currentSchemaContext, rpcServiceFailedInvocation);
 
         final Document rpcDocument = XmlFileLoader.xmlFileToDocument("messages/mapping/rpcs/rpc-nonvoid.xml");
         final HandlingPriority priority = rpc.canHandle(rpcDocument);
@@ -246,7 +250,7 @@ public class RuntimeRpcTest {
 
     @Test
     public void testVoidInputOutputRpc() throws Exception {
-        final RuntimeRpc rpc = new RuntimeRpc(SESSION_ID_FOR_REPORTING, currentSchemaContext, RPC_SERVICE_VOID_INVOKER);
+        final RuntimeRpc rpc = new RuntimeRpc(SESSION_ID_FOR_REPORTING, currentSchemaContext, rpcServiceVoidInvoke);
 
         final Document rpcDocument = XmlFileLoader.xmlFileToDocument("messages/mapping/rpcs/rpc-void-input-output.xml");
         final HandlingPriority priority = rpc.canHandle(rpcDocument);
@@ -259,7 +263,7 @@ public class RuntimeRpcTest {
 
     @Test
     public void testBadNamespaceInRpc() throws Exception {
-        final RuntimeRpc rpc = new RuntimeRpc(SESSION_ID_FOR_REPORTING, currentSchemaContext, RPC_SERVICE_VOID_INVOKER);
+        final RuntimeRpc rpc = new RuntimeRpc(SESSION_ID_FOR_REPORTING, currentSchemaContext, rpcServiceVoidInvoke);
         final Document rpcDocument = XmlFileLoader.xmlFileToDocument("messages/mapping/rpcs/rpc-bad-namespace.xml");
 
         try {
@@ -289,5 +293,17 @@ public class RuntimeRpcTest {
         }
 
         return null;
+    }
+
+    private List<InputStream> getYangSchemas() {
+        final List<String> schemaPaths = Collections.singletonList("/yang/mdsal-netconf-rpc-test.yang");
+        final List<InputStream> schemas = new ArrayList<>();
+
+        for (final String schemaPath : schemaPaths) {
+            final InputStream resourceAsStream = getClass().getResourceAsStream(schemaPath);
+            schemas.add(resourceAsStream);
+        }
+
+        return schemas;
     }
 }

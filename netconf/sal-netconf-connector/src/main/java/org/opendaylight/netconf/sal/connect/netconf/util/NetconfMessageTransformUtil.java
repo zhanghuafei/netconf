@@ -67,7 +67,7 @@ import org.slf4j.LoggerFactory;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 
-public final class NetconfMessageTransformUtil {
+public class NetconfMessageTransformUtil {
 
     private static final Logger LOG = LoggerFactory.getLogger(NetconfMessageTransformUtil.class);
 
@@ -312,8 +312,8 @@ public final class NetconfMessageTransformUtil {
         } else {
             final Entry<QName, ModifyAction> modifyOperation = operation.isPresent()
                     ? new AbstractMap.SimpleEntry<>(NETCONF_OPERATION_QNAME, operation.get()) : null;
-            configContent = ImmutableNodes.fromInstanceId(ctx, dataPath, lastChildOverride.toJavaUtil(),
-                java.util.Optional.ofNullable(modifyOperation));
+            configContent = ImmutableNodes
+                    .fromInstanceId(ctx, dataPath, lastChildOverride, Optional.fromNullable(modifyOperation));
         }
 
         final Element element = XmlUtil.createElement(BLANK_DOCUMENT, NETCONF_CONFIG_QNAME.getLocalName(),
@@ -363,8 +363,7 @@ public final class NetconfMessageTransformUtil {
                     NetconfNotification.RFC3339_DATE_PARSER.apply(eventTimeElement.getTextContent()),
                     notificationElement);
         } catch (final DocumentedException e) {
-            throw new IllegalArgumentException("Notification payload does not contain " + EVENT_TIME + " " + message,
-                    e);
+            throw new IllegalArgumentException("Notification payload does not contain " + EVENT_TIME + " " + message);
         } catch (final DateTimeParseException e) {
             LOG.warn("Unable to parse event time from {}. Setting time to {}", eventTimeElement,
                     NetconfNotification.UNKNOWN_EVENT_TIME, e);

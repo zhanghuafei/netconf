@@ -71,12 +71,11 @@ public class ListenerAdapter extends AbstractCommonSubscriber implements DOMData
 
         this.outputType = Preconditions.checkNotNull(outputType);
         this.path = Preconditions.checkNotNull(path);
-        Preconditions.checkArgument(streamName != null && !streamName.isEmpty());
+        Preconditions.checkArgument((streamName != null) && !streamName.isEmpty());
         this.streamName = streamName;
     }
 
     @Override
-    @SuppressWarnings("checkstyle:hiddenField")
     public void onDataChanged(final AsyncDataChangeEvent<YangInstanceIdentifier, NormalizedNode<?, ?>> change) {
         this.change = change;
         final String xml = prepareXml();
@@ -164,7 +163,6 @@ public class ListenerAdapter extends AbstractCommonSubscriber implements DOMData
      * @param change
      *            {@link AsyncDataChangeEvent}
      */
-    @SuppressWarnings("checkstyle:hiddenField")
     private void addValuesToDataChangedNotificationEventElement(final Document doc,
             final Element dataChangedNotificationEventElement,
             final AsyncDataChangeEvent<YangInstanceIdentifier, NormalizedNode<?, ?>> change,
@@ -199,12 +197,12 @@ public class ListenerAdapter extends AbstractCommonSubscriber implements DOMData
     private void addValuesFromDataToElement(final Document doc, final Set<YangInstanceIdentifier> data,
             final Element element, final Operation operation, final SchemaContext schemaContext,
             final DataSchemaContextTree dataSchemaContextTree) {
-        if (data == null || data.isEmpty()) {
+        if ((data == null) || data.isEmpty()) {
             return;
         }
-        for (final YangInstanceIdentifier yiid : data) {
-            if (!dataSchemaContextTree.getChild(yiid).isMixin()) {
-                final Node node = createDataChangeEventElement(doc, yiid, operation, schemaContext);
+        for (final YangInstanceIdentifier path : data) {
+            if (!dataSchemaContextTree.getChild(path).isMixin()) {
+                final Node node = createDataChangeEventElement(doc, path, operation, schemaContext);
                 element.appendChild(node);
             }
         }
@@ -214,7 +212,7 @@ public class ListenerAdapter extends AbstractCommonSubscriber implements DOMData
             final Set<Entry<YangInstanceIdentifier, NormalizedNode<?, ?>>> data, final Element element,
             final Operation operation, final SchemaContext schemaContext,
             final DataSchemaContextTree dataSchemaContextTree) {
-        if (data == null || data.isEmpty()) {
+        if ((data == null) || data.isEmpty()) {
             return;
         }
         for (final Entry<YangInstanceIdentifier, NormalizedNode<?, ?>> entry : data) {
@@ -240,11 +238,11 @@ public class ListenerAdapter extends AbstractCommonSubscriber implements DOMData
      *            schema context
      * @return {@link Node} node represented by changed event element.
      */
-    private Node createDataChangeEventElement(final Document doc, final YangInstanceIdentifier eventPath,
+    private Node createDataChangeEventElement(final Document doc, final YangInstanceIdentifier path,
             final Operation operation, final SchemaContext schemaContext) {
         final Element dataChangeEventElement = doc.createElement("data-change-event");
         final Element pathElement = doc.createElement("path");
-        addPathAsValueToElement(eventPath, pathElement, schemaContext);
+        addPathAsValueToElement(path, pathElement, schemaContext);
         dataChangeEventElement.appendChild(pathElement);
 
         final Element operationElement = doc.createElement("operation");
@@ -259,8 +257,8 @@ public class ListenerAdapter extends AbstractCommonSubscriber implements DOMData
             final SchemaContext schemaContext, final DataSchemaContextTree dataSchemaContextTree) {
         final Element dataChangeEventElement = doc.createElement("data-change-event");
         final Element pathElement = doc.createElement("path");
-        final YangInstanceIdentifier eventPath = entry.getKey();
-        addPathAsValueToElement(eventPath, pathElement, schemaContext);
+        final YangInstanceIdentifier path = entry.getKey();
+        addPathAsValueToElement(path, pathElement, schemaContext);
         dataChangeEventElement.appendChild(pathElement);
 
         final Element operationElement = doc.createElement("operation");
@@ -270,10 +268,10 @@ public class ListenerAdapter extends AbstractCommonSubscriber implements DOMData
         try {
             SchemaPath nodePath;
             final NormalizedNode<?, ?> normalized = entry.getValue();
-            if (normalized instanceof MapEntryNode || normalized instanceof UnkeyedListEntryNode) {
-                nodePath = dataSchemaContextTree.getChild(eventPath).getDataSchemaNode().getPath();
+            if ((normalized instanceof MapEntryNode) || (normalized instanceof UnkeyedListEntryNode)) {
+                nodePath = dataSchemaContextTree.getChild(path).getDataSchemaNode().getPath();
             } else {
-                nodePath = dataSchemaContextTree.getChild(eventPath).getDataSchemaNode().getPath().getParent();
+                nodePath = dataSchemaContextTree.getChild(path).getDataSchemaNode().getPath().getParent();
             }
             final DOMResult domResult = writeNormalizedNode(normalized, schemaContext, nodePath);
             final Node result = doc.importNode(domResult.getNode().getFirstChild(), true);
@@ -292,7 +290,7 @@ public class ListenerAdapter extends AbstractCommonSubscriber implements DOMData
     /**
      * Adds path as value to element.
      *
-     * @param eventPath
+     * @param path
      *            Path to data in data store.
      * @param element
      *            {@link Element}
@@ -300,11 +298,11 @@ public class ListenerAdapter extends AbstractCommonSubscriber implements DOMData
      *            schema context
      */
     @SuppressWarnings("rawtypes")
-    private void addPathAsValueToElement(final YangInstanceIdentifier eventPath, final Element element,
+    private void addPathAsValueToElement(final YangInstanceIdentifier path, final Element element,
             final SchemaContext schemaContext) {
         final StringBuilder textContent = new StringBuilder();
 
-        for (final PathArgument pathArgument : eventPath.getPathArguments()) {
+        for (final PathArgument pathArgument : path.getPathArguments()) {
             if (pathArgument instanceof YangInstanceIdentifier.AugmentationIdentifier) {
                 continue;
             }
@@ -345,7 +343,8 @@ public class ListenerAdapter extends AbstractCommonSubscriber implements DOMData
      */
     private static void writeIdentifierWithNamespacePrefix(final Element element, final StringBuilder textContent,
             final QName qualifiedName, final SchemaContext schemaContext) {
-        final Module module = schemaContext.findModule(qualifiedName.getModule()).get();
+        final Module module = schemaContext.findModuleByNamespaceAndRevision(qualifiedName.getNamespace(),
+                qualifiedName.getRevision());
 
         textContent.append(module.getName());
         textContent.append(":");

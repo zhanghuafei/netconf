@@ -31,13 +31,13 @@ class NetconfRpcStructureTransformer implements RpcStructureTransformer {
     public Optional<NormalizedNode<?, ?>> selectFromDataStructure(
             final DataContainerChild<? extends YangInstanceIdentifier.PathArgument, ?> data,
             final YangInstanceIdentifier path) {
-        return Optional.fromJavaUtil(NormalizedNodes.findNode(data, path.getPathArguments()));
+        return NormalizedNodes.findNode(data, path.getPathArguments());
     }
 
     @Override
     public AnyXmlNode createEditConfigStructure(final Optional<NormalizedNode<?, ?>> data,
                                                 final YangInstanceIdentifier dataPath,
-                                                final Optional<ModifyAction> operation) {
+                                                Optional<ModifyAction> operation) {
         return NetconfMessageTransformUtil.createEditConfigAnyxml(schemaContext, dataPath, operation, data);
     }
 

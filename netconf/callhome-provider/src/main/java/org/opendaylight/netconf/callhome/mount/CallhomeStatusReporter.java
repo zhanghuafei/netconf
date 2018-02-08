@@ -11,8 +11,10 @@ package org.opendaylight.netconf.callhome.mount;
 import com.google.common.base.Optional;
 import com.google.common.util.concurrent.ListenableFuture;
 import java.io.IOException;
-import java.security.GeneralSecurityException;
+import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
 import java.security.PublicKey;
+import java.security.spec.InvalidKeySpecException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -61,14 +63,14 @@ class CallhomeStatusReporter implements DataTreeChangeListener<Node>, StatusReco
     private final DataBroker dataBroker;
     private final ListenerRegistration<CallhomeStatusReporter> reg;
 
-    CallhomeStatusReporter(final DataBroker broker) {
+    CallhomeStatusReporter(DataBroker broker) {
         this.dataBroker = broker;
         this.reg = dataBroker.registerDataTreeChangeListener(new DataTreeIdentifier<>(LogicalDatastoreType.OPERATIONAL,
             NETCONF_TOPO_IID.child(Node.class)), this);
     }
 
     @Override
-    public void onDataTreeChanged(@Nonnull final Collection<DataTreeModification<Node>> changes) {
+    public void onDataTreeChanged(@Nonnull Collection<DataTreeModification<Node>> changes) {
         for (DataTreeModification<Node> change: changes) {
             final DataObjectModification<Node> rootNode = change.getRootNode();
             final InstanceIdentifier<Node> identifier = change.getRootPath().getRootIdentifier();
@@ -97,16 +99,16 @@ class CallhomeStatusReporter implements DataTreeChangeListener<Node>, StatusReco
         }
     }
 
-    private static boolean isNetconfNode(final Node node) {
+    private boolean isNetconfNode(Node node) {
         return node.getAugmentation(NetconfNode.class) != null;
     }
 
-    private static NodeId getNodeId(final InstanceIdentifier<?> path) {
+    private NodeId getNodeId(final InstanceIdentifier<?> path) {
         NodeKey key = path.firstKeyOf(Node.class);
         return key != null ? key.getNodeId() : null;
     }
 
-    private void handledNetconfNode(final NodeId nodeId, final NetconfNode nnode) {
+    private void handledNetconfNode(NodeId nodeId, NetconfNode nnode) {
         NetconfNodeConnectionStatus.ConnectionStatus csts = nnode.getConnectionStatus();
 
         switch (csts) {
@@ -122,7 +124,7 @@ class CallhomeStatusReporter implements DataTreeChangeListener<Node>, StatusReco
         }
     }
 
-    private void handleConnectedNetconfNode(final NodeId nodeId) {
+    private void handleConnectedNetconfNode(NodeId nodeId) {
         // Fully connected, all services for remote device are
         // available from the MountPointService.
         LOG.debug("NETCONF Node: {} is fully connected", nodeId.getValue());
@@ -140,7 +142,7 @@ class CallhomeStatusReporter implements DataTreeChangeListener<Node>, StatusReco
         }
     }
 
-    private void handleDisconnectedNetconfNode(final NodeId nodeId) {
+    private void handleDisconnectedNetconfNode(NodeId nodeId) {
         LOG.debug("NETCONF Node: {} disconnected", nodeId.getValue());
 
         Device opDev = readAndGetDevice(nodeId);
@@ -156,7 +158,7 @@ class CallhomeStatusReporter implements DataTreeChangeListener<Node>, StatusReco
         }
     }
 
-    private void handleUnableToConnectNetconfNode(final NodeId nodeId) {
+    private void handleUnableToConnectNetconfNode(NodeId nodeId) {
         // The maximum configured number of reconnect attempts
         // have been reached. No more reconnects will be
         // attempted by the Netconf Connector.
@@ -175,19 +177,19 @@ class CallhomeStatusReporter implements DataTreeChangeListener<Node>, StatusReco
         }
     }
 
-    void asForceListedDevice(final String id, final PublicKey serverKey) {
+    void asForceListedDevice(String id, PublicKey serverKey) {
         NodeId nid = new NodeId(id);
         Device device = newDevice(id, serverKey, Device1.DeviceStatus.DISCONNECTED);
         writeDevice(nid, device);
     }
 
-    void asUnlistedDevice(final String id, final PublicKey serverKey) {
+    void asUnlistedDevice(String id, PublicKey serverKey) {
         NodeId nid = new NodeId(id);
         Device device = newDevice(id, serverKey, Device1.DeviceStatus.FAILEDNOTALLOWED);
         writeDevice(nid, device);
     }
 
-    private static Device newDevice(final String id, final PublicKey serverKey, final Device1.DeviceStatus status) {
+    private Device newDevice(String id, PublicKey serverKey, Device1.DeviceStatus status) {
         String sshEncodedKey = serverKey.toString();
         try {
             sshEncodedKey = AuthorizedKeysDecoder.encodePublicKey(serverKey);
@@ -204,12 +206,12 @@ class CallhomeStatusReporter implements DataTreeChangeListener<Node>, StatusReco
         return builder.build();
     }
 
-    private Device readAndGetDevice(final NodeId nodeId) {
+    private Device readAndGetDevice(NodeId nodeId) {
         return readDevice(nodeId).orNull();
     }
 
     @Nonnull
-    private Optional<Device> readDevice(final NodeId nodeId) {
+    private Optional<Device> readDevice(NodeId nodeId) {
         ReadOnlyTransaction opTx = dataBroker.newReadOnlyTransaction();
 
         InstanceIdentifier<Device> deviceIID = buildDeviceInstanceIdentifier(nodeId);
@@ -221,43 +223,43 @@ class CallhomeStatusReporter implements DataTreeChangeListener<Node>, StatusReco
         }
     }
 
-    private void writeDevice(final NodeId nodeId, final Device modifiedDevice) {
+    private void writeDevice(NodeId nodeId, Device modifiedDevice) {
         ReadWriteTransaction opTx = dataBroker.newReadWriteTransaction();
         opTx.merge(LogicalDatastoreType.OPERATIONAL, buildDeviceInstanceIdentifier(nodeId), modifiedDevice);
         opTx.submit();
     }
 
-    private static InstanceIdentifier<Device> buildDeviceInstanceIdentifier(final NodeId nodeId) {
+    private InstanceIdentifier<Device> buildDeviceInstanceIdentifier(NodeId nodeId) {
         return InstanceIdentifier.create(NetconfCallhomeServer.class)
                 .child(AllowedDevices.class)
                 .child(Device.class, new DeviceKey(nodeId.getValue()));
     }
 
-    private static Device withConnectedStatus(final Device opDev) {
+    private Device withConnectedStatus(Device opDev) {
         Device1 status = new Device1Builder().setDeviceStatus(Device1.DeviceStatus.CONNECTED).build();
         return new DeviceBuilder().addAugmentation(Device1.class, status).setUniqueId(opDev.getUniqueId())
                 .setSshHostKey(opDev.getSshHostKey()).build();
     }
 
-    private static Device withFailedStatus(final Device opDev) {
+    private Device withFailedStatus(Device opDev) {
         Device1 status = new Device1Builder().setDeviceStatus(Device1.DeviceStatus.FAILED).build();
         return new DeviceBuilder().addAugmentation(Device1.class, status).setUniqueId(opDev.getUniqueId())
                 .setSshHostKey(opDev.getSshHostKey()).build();
     }
 
-    private static Device withDisconnectedStatus(final Device opDev) {
+    private Device withDisconnectedStatus(Device opDev) {
         Device1 status = new Device1Builder().setDeviceStatus(Device1.DeviceStatus.DISCONNECTED).build();
         return new DeviceBuilder().addAugmentation(Device1.class, status).setUniqueId(opDev.getUniqueId())
                 .setSshHostKey(opDev.getSshHostKey()).build();
     }
 
-    private static Device withFailedAuthStatus(final Device opDev) {
+    private Device withFailedAuthStatus(Device opDev) {
         Device1 status = new Device1Builder().setDeviceStatus(Device1.DeviceStatus.FAILEDAUTHFAILURE).build();
         return new DeviceBuilder().addAugmentation(Device1.class, status).setUniqueId(opDev.getUniqueId())
                 .setSshHostKey(opDev.getSshHostKey()).build();
     }
 
-    private void setDeviceStatus(final Device device) {
+    private void setDeviceStatus(Device device) {
         WriteTransaction tx = dataBroker.newWriteOnlyTransaction();
         InstanceIdentifier<Device> deviceIId =
                 InstanceIdentifier.create(NetconfCallhomeServer.class)
@@ -286,7 +288,7 @@ class CallhomeStatusReporter implements DataTreeChangeListener<Node>, StatusReco
     }
 
     @Override
-    public void reportFailedAuth(final PublicKey sshKey) {
+    public void reportFailedAuth(PublicKey sshKey) {
         AuthorizedKeysDecoder decoder = new AuthorizedKeysDecoder();
 
         for (Device device : getDevicesAsList()) {
@@ -303,7 +305,7 @@ class CallhomeStatusReporter implements DataTreeChangeListener<Node>, StatusReco
                     setDeviceStatus(failedDevice);
                     return;
                 }
-            } catch (GeneralSecurityException e) {
+            } catch (InvalidKeySpecException | NoSuchAlgorithmException | NoSuchProviderException e) {
                 LOG.error("Failed decoding a device key with host key: {} {}", keyString, e);
                 return;
             }

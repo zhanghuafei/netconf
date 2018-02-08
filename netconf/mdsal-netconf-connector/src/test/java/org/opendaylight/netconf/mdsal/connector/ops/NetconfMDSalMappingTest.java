@@ -17,8 +17,12 @@ import static org.mockito.Mockito.doAnswer;
 
 import com.google.common.io.ByteSource;
 import com.google.common.util.concurrent.Futures;
+import java.io.InputStream;
 import java.io.StringWriter;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.EnumMap;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import javax.xml.transform.OutputKeys;
 import javax.xml.transform.Transformer;
@@ -129,8 +133,7 @@ public class NetconfMDSalMappingTest {
         XMLUnit.setIgnoreWhitespace(true);
         XMLUnit.setIgnoreAttributeOrder(true);
 
-        this.schemaContext = YangParserTestUtils.parseYangResources(NetconfMDSalMappingTest.class,
-            "/META-INF/yang/config@2013-04-05.yang", "/yang/mdsal-netconf-mapping-test.yang");
+        this.schemaContext = YangParserTestUtils.parseYangStreams(getYangSchemas());
         schemaContext.getModules();
         final SchemaService schemaService = createSchemaService();
 
@@ -142,7 +145,7 @@ public class NetconfMDSalMappingTest {
         datastores.put(LogicalDatastoreType.OPERATIONAL, operStore);
 
         final ExecutorService listenableFutureExecutor = SpecialExecutors.newBlockingBoundedCachedThreadPool(
-                16, 16, "CommitFutures", NetconfMDSalMappingTest.class);
+                16, 16, "CommitFutures");
 
         final ConcurrentDOMDataBroker cdb = new ConcurrentDOMDataBroker(datastores, listenableFutureExecutor);
         this.transactionProvider = new TransactionProvider(cdb, SESSION_ID_FOR_REPORTING);
@@ -151,7 +154,7 @@ public class NetconfMDSalMappingTest {
             final SourceIdentifier sId = (SourceIdentifier) invocationOnMock.getArguments()[0];
             final YangTextSchemaSource yangTextSchemaSource =
                     YangTextSchemaSource.delegateForByteSource(sId, ByteSource.wrap("module test".getBytes()));
-            return Futures.immediateFuture(yangTextSchemaSource);
+            return Futures.immediateCheckedFuture(yangTextSchemaSource);
 
         }).when(sourceProvider).getSource(any(SourceIdentifier.class));
 
@@ -553,7 +556,7 @@ public class NetconfMDSalMappingTest {
                         + "  </edit-config>\n"
                         + "</rpc>";
         XmlElement xe = getXmlElement(stringWithoutPrefix);
-        NodeList nodeList = EditConfig.getElementsByTagName(xe, TARGET_KEY);
+        NodeList nodeList = editConfig.getElementsByTagName(xe, TARGET_KEY);
         Assert.assertEquals(1, nodeList.getLength());
 
         String stringWithPrefix =
@@ -566,7 +569,7 @@ public class NetconfMDSalMappingTest {
                         + "</nc:rpc>";
 
         xe = getXmlElement(stringWithPrefix);
-        nodeList = EditConfig.getElementsByTagName(xe, TARGET_KEY);
+        nodeList = editConfig.getElementsByTagName(xe, TARGET_KEY);
         Assert.assertEquals(1, nodeList.getLength());
 
         String stringWithoutTarget =
@@ -579,7 +582,7 @@ public class NetconfMDSalMappingTest {
         xe = getXmlElement(stringWithoutTarget);
 
         try {
-            nodeList = EditConfig.getElementsByTagName(xe, TARGET_KEY);
+            nodeList = editConfig.getElementsByTagName(xe, TARGET_KEY);
             XmlElement.fromDomElement((Element) nodeList.item(0)).getOnlyChildElement();
             Assert.fail("Not specified target, we should fail");
         } catch (DocumentedException documentedException) {
@@ -588,7 +591,7 @@ public class NetconfMDSalMappingTest {
 
     }
 
-    private static XmlElement getXmlElement(final String elementAsString) throws Exception {
+    private XmlElement getXmlElement(final String elementAsString) throws Exception {
         Document document = XmlUtil.readXmlToDocument(elementAsString);
         Element element = document.getDocumentElement();
         return XmlElement.fromDomElement(element);
@@ -819,6 +822,19 @@ public class NetconfMDSalMappingTest {
 
         LOG.debug("Got response {}", response);
         return response;
+    }
+
+    private List<InputStream> getYangSchemas() {
+        final List<String> schemaPaths = Arrays.asList("/META-INF/yang/config@2013-04-05.yang",
+                "/yang/mdsal-netconf-mapping-test.yang");
+        final List<InputStream> schemas = new ArrayList<>();
+
+        for (final String schemaPath : schemaPaths) {
+            final InputStream resourceAsStream = getClass().getResourceAsStream(schemaPath);
+            schemas.add(resourceAsStream);
+        }
+
+        return schemas;
     }
 
     private SchemaService createSchemaService() {

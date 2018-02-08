@@ -55,7 +55,6 @@ public class SimpleNetconfClientSessionListener implements NetconfClientSessionL
     }
 
     @Override
-    @SuppressWarnings("checkstyle:hiddenField")
     public final synchronized void onSessionUp(NetconfClientSession clientSession) {
         this.clientSession = Preconditions.checkNotNull(clientSession);
         LOG.debug("Client session {} went up", clientSession);
@@ -72,14 +71,12 @@ public class SimpleNetconfClientSessionListener implements NetconfClientSessionL
     }
 
     @Override
-    @SuppressWarnings("checkstyle:hiddenField")
     public final void onSessionDown(NetconfClientSession clientSession, Exception exception) {
         LOG.debug("Client Session {} went down unexpectedly", clientSession, exception);
         tearDown(exception);
     }
 
     @Override
-    @SuppressWarnings("checkstyle:hiddenField")
     public final void onSessionTerminated(NetconfClientSession clientSession,
                                           NetconfTerminationReason netconfTerminationReason) {
         LOG.debug("Client Session {} terminated, reason: {}", clientSession,

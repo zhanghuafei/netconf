@@ -27,8 +27,4 @@ public final class NetconfConstants {
 
     public static final Set<String> CONFIG_SERVICE_MARKERS = Sets.newHashSet(SERVICE_NAME, CONFIG_NETCONF_CONNECTOR,
             NETCONF_MONITORING, NETCONF_NOTIFICATION);
-
-    private NetconfConstants() {
-
-    }
 }

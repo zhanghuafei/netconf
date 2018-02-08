@@ -17,7 +17,6 @@ import static org.mockito.Mockito.when;
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableClassToInstanceMap;
 import com.google.common.collect.Maps;
-import java.util.Map.Entry;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -28,8 +27,6 @@ import org.opendaylight.controller.md.sal.dom.api.DOMMountPoint;
 import org.opendaylight.controller.md.sal.dom.api.DOMMountPointService;
 import org.opendaylight.controller.md.sal.dom.broker.impl.mount.DOMMountPointServiceImpl;
 import org.opendaylight.controller.md.sal.dom.broker.spi.mount.SimpleDOMMountPoint;
-import org.opendaylight.mdsal.dom.api.DOMSchemaService;
-import org.opendaylight.mdsal.dom.api.DOMYangTextSourceProvider;
 import org.opendaylight.restconf.common.context.InstanceIdentifierContext;
 import org.opendaylight.restconf.common.errors.RestconfDocumentedException;
 import org.opendaylight.restconf.common.errors.RestconfError;
@@ -39,7 +36,7 @@ import org.opendaylight.restconf.common.schema.SchemaExportContext;
 import org.opendaylight.restconf.nb.rfc8040.TestRestconfUtils;
 import org.opendaylight.restconf.nb.rfc8040.utils.RestconfConstants;
 import org.opendaylight.yangtools.yang.common.QName;
-import org.opendaylight.yangtools.yang.common.Revision;
+import org.opendaylight.yangtools.yang.common.SimpleDateFormatUtil;
 import org.opendaylight.yangtools.yang.data.api.YangInstanceIdentifier;
 import org.opendaylight.yangtools.yang.model.api.Module;
 import org.opendaylight.yangtools.yang.model.api.SchemaContext;
@@ -100,10 +97,6 @@ public class ParserIdentifierTest {
     private DOMMountPoint mockMountPoint;
     @Mock
     private DOMMountPointService mockMountPointService;
-    @Mock
-    private DOMSchemaService domSchemaService;
-    @Mock
-    private DOMYangTextSourceProvider sourceProvider;
 
     @Rule
     public final ExpectedException thrown = ExpectedException.none();
@@ -111,9 +104,9 @@ public class ParserIdentifierTest {
     @Before
     public void setup() throws Exception {
         MockitoAnnotations.initMocks(this);
-        this.schemaContext = YangParserTestUtils.parseYangFiles(TestRestconfUtils.loadFiles("/parser-identifier"));
+        this.schemaContext = YangParserTestUtils.parseYangSources(TestRestconfUtils.loadFiles("/parser-identifier"));
         this.schemaContextOnMountPoint =
-                YangParserTestUtils.parseYangFiles(TestRestconfUtils.loadFiles("/parser-identifier"));
+                YangParserTestUtils.parseYangSources(TestRestconfUtils.loadFiles("/parser-identifier"));
 
         // create and register mount point
         this.mountPoint = SimpleDOMMountPoint.create(
@@ -287,12 +280,13 @@ public class ParserIdentifierTest {
      */
     @Test
     public void makeQNameFromIdentifierTest() {
-        final Entry<String, Revision> qName = ParserIdentifier.makeQNameFromIdentifier(
-            TEST_MODULE_NAME + "/" + TEST_MODULE_REVISION);
+        final QName qName = ParserIdentifier.makeQNameFromIdentifier(TEST_MODULE_NAME + "/" + TEST_MODULE_REVISION);
 
         assertNotNull("QName should be created", qName);
-        assertEquals("Returned not expected module name", TEST_MODULE_NAME, qName.getKey());
-        assertEquals("Returned not expected module revision", Revision.of(TEST_MODULE_REVISION), qName.getValue());
+        assertEquals("Returned not expected module name",
+                TEST_MODULE_NAME, qName.getLocalName());
+        assertEquals("Returned not expected module revision",
+                TEST_MODULE_REVISION, qName.getFormattedRevision());
     }
 
     /**
@@ -341,7 +335,7 @@ public class ParserIdentifierTest {
      */
     @Test
     public void makeQNameFromIdentifierMountTest() {
-        final Entry<String, Revision> qName = ParserIdentifier.makeQNameFromIdentifier(
+        final QName qName = ParserIdentifier.makeQNameFromIdentifier(
                 MOUNT_POINT_IDENT
                 + "/"
                 + TEST_MODULE_NAME
@@ -349,8 +343,10 @@ public class ParserIdentifierTest {
                 + TEST_MODULE_REVISION);
 
         assertNotNull("QName should be created", qName);
-        assertEquals("Returned not expected module name", TEST_MODULE_NAME, qName.getKey());
-        assertEquals("Returned not expected module revision", Revision.of(TEST_MODULE_REVISION), qName.getValue());
+        assertEquals("Returned not expected module name",
+                TEST_MODULE_NAME, qName.getLocalName());
+        assertEquals("Returned not expected module revision",
+                TEST_MODULE_REVISION, qName.getFormattedRevision());
     }
 
     /**
@@ -465,7 +461,7 @@ public class ParserIdentifierTest {
     @Test
     public void toSchemaExportContextFromIdentifierTest() {
         final SchemaExportContext exportContext = ParserIdentifier.toSchemaExportContextFromIdentifier(
-                this.schemaContext, TEST_MODULE_NAME + "/" + TEST_MODULE_REVISION, null, sourceProvider);
+                this.schemaContext, TEST_MODULE_NAME + "/" + TEST_MODULE_REVISION, null);
 
         assertNotNull("Export context should be parsed", exportContext);
 
@@ -475,7 +471,7 @@ public class ParserIdentifierTest {
         assertEquals("Returned not expected module name",
                 TEST_MODULE_NAME, module.getName());
         assertEquals("Returned not expected module revision",
-                Revision.ofNullable(TEST_MODULE_REVISION), module.getRevision());
+                TEST_MODULE_REVISION, SimpleDateFormatUtil.getRevisionFormat().format(module.getRevision()));
         assertEquals("Returned not expected module namespace",
                 TEST_MODULE_NAMESPACE, module.getNamespace().toString());
     }
@@ -489,7 +485,7 @@ public class ParserIdentifierTest {
         final SchemaExportContext exportContext = ParserIdentifier.toSchemaExportContextFromIdentifier(
                 this.schemaContext,
                 "not-existing-module" + "/" + "2016-01-01",
-                null, sourceProvider);
+                null);
 
         assertNotNull("Export context should be parsed", exportContext);
         assertNull("Not-existing module should be null", exportContext.getModule());
@@ -504,7 +500,7 @@ public class ParserIdentifierTest {
     public void toSchemaExportContextFromIdentifierInvalidIdentifierNegativeTest() {
         try {
             ParserIdentifier.toSchemaExportContextFromIdentifier(
-                    this.schemaContext, TEST_MODULE_REVISION + "/" + TEST_MODULE_NAME, null, sourceProvider);
+                    this.schemaContext, TEST_MODULE_REVISION + "/" + TEST_MODULE_NAME, null);
             fail("Test should fail due to invalid identifier supplied");
         } catch (final RestconfDocumentedException e) {
             assertEquals("Not expected error type",
@@ -525,7 +521,7 @@ public class ParserIdentifierTest {
         final SchemaExportContext exportContext = ParserIdentifier.toSchemaExportContextFromIdentifier(
                 this.schemaContext,
                 MOUNT_POINT_IDENT + "/" + TEST_MODULE_NAME + "/" + TEST_MODULE_REVISION,
-                this.mountPointService, sourceProvider);
+                this.mountPointService);
 
         final Module module = exportContext.getModule();
         assertNotNull("Export context should contains test module", module);
@@ -533,7 +529,7 @@ public class ParserIdentifierTest {
         assertEquals("Returned not expected module name",
                 TEST_MODULE_NAME, module.getName());
         assertEquals("Returned not expected module revision",
-                Revision.ofNullable(TEST_MODULE_REVISION), module.getRevision());
+                TEST_MODULE_REVISION, SimpleDateFormatUtil.getRevisionFormat().format(module.getRevision()));
         assertEquals("Returned not expected module namespace",
                 TEST_MODULE_NAMESPACE, module.getNamespace().toString());
     }
@@ -547,7 +543,7 @@ public class ParserIdentifierTest {
         final SchemaExportContext exportContext = ParserIdentifier.toSchemaExportContextFromIdentifier(
                 this.schemaContext,
                 MOUNT_POINT_IDENT + "/" + "not-existing-module" + "/" + "2016-01-01",
-                this.mountPointService, sourceProvider);
+                this.mountPointService);
 
         assertNotNull("Export context should be parsed", exportContext);
         assertNull("Not-existing module should be null", exportContext.getModule());
@@ -564,7 +560,7 @@ public class ParserIdentifierTest {
             ParserIdentifier.toSchemaExportContextFromIdentifier(
                     this.schemaContext,
                     MOUNT_POINT_IDENT + "/" + TEST_MODULE_REVISION + "/" + TEST_MODULE_NAME,
-                    this.mountPointService, sourceProvider);
+                    this.mountPointService);
 
             fail("Test should fail due to invalid identifier supplied");
         } catch (final RestconfDocumentedException e) {
@@ -584,7 +580,7 @@ public class ParserIdentifierTest {
     @Test
     public void toSchemaExportContextFromIdentifierNullIdentifierNegativeTest() {
         this.thrown.expect(NullPointerException.class);
-        ParserIdentifier.toSchemaExportContextFromIdentifier(this.schemaContext, null, null, sourceProvider);
+        ParserIdentifier.toSchemaExportContextFromIdentifier(this.schemaContext, null, null);
     }
 
     /**
@@ -594,8 +590,7 @@ public class ParserIdentifierTest {
     @Test
     public void toSchemaExportContextFromIdentifierNullSchemaContextNegativeTest() {
         this.thrown.expect(NullPointerException.class);
-        ParserIdentifier.toSchemaExportContextFromIdentifier(null, TEST_MODULE_NAME + "/" + TEST_MODULE_REVISION, null,
-                sourceProvider);
+        ParserIdentifier.toSchemaExportContextFromIdentifier(null, TEST_MODULE_NAME + "/" + TEST_MODULE_REVISION, null);
     }
 
     /**
@@ -613,8 +608,7 @@ public class ParserIdentifierTest {
                 + TEST_MODULE_NAME
                 + "/"
                 + TEST_MODULE_REVISION,
-                this.mountPointService,
-                sourceProvider);
+                this.mountPointService);
     }
 
     /**
@@ -632,8 +626,7 @@ public class ParserIdentifierTest {
                 + TEST_MODULE_NAME
                 + "/"
                 + TEST_MODULE_REVISION,
-                null,
-                sourceProvider);
+                null);
     }
 
     /**
@@ -651,8 +644,7 @@ public class ParserIdentifierTest {
                 + TEST_MODULE_NAME
                 + "/"
                 + TEST_MODULE_REVISION,
-                this.mockMountPointService,
-                sourceProvider);
+                this.mockMountPointService);
     }
 
     /**

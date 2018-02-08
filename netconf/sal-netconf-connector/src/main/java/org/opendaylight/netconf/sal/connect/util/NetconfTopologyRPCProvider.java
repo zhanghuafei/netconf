@@ -61,7 +61,7 @@ public class NetconfTopologyRPCProvider implements NetconfNodeTopologyService {
         final NetconfNode node = this.encryptPassword(input);
         final SettableFuture<RpcResult<Void>> futureResult = SettableFuture.create();
         final NodeId nodeId = new NodeId(input.getNodeId());
-        writeToConfigDS(node, nodeId, futureResult);
+        writeToConfigDS(node, nodeId, topologyId, futureResult);
         return futureResult;
     }
 
@@ -91,7 +91,7 @@ public class NetconfTopologyRPCProvider implements NetconfNodeTopologyService {
         return credentials;
     }
 
-    private void writeToConfigDS(final NetconfNode node, final NodeId nodeId,
+    private void writeToConfigDS(final NetconfNode node, final NodeId nodeId, final String topologyId,
                                  final SettableFuture<RpcResult<Void>> futureResult) {
 
         final WriteTransaction writeTransaction = dataBroker.newWriteOnlyTransaction();
