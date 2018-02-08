@@ -50,6 +50,7 @@ import org.opendaylight.controller.md.sal.dom.api.DOMRpcResult;
 import org.opendaylight.controller.md.sal.dom.api.DOMRpcService;
 import org.opendaylight.controller.md.sal.dom.api.DOMTransactionChain;
 import org.opendaylight.controller.md.sal.dom.spi.DefaultDOMRpcResult;
+import org.opendaylight.mdsal.dom.api.DOMSchemaService;
 import org.opendaylight.restconf.nb.rfc8040.TestUtils;
 import org.opendaylight.restconf.nb.rfc8040.handlers.DOMDataBrokerHandler;
 import org.opendaylight.restconf.nb.rfc8040.handlers.DOMMountPointServiceHandler;
@@ -135,6 +136,9 @@ public class JSONRestconfServiceRfc8040ImplTest {
     @Mock
     private DOMRpcService mockRpcService;
 
+    @Mock
+    private DOMSchemaService domSchemaService;
+
     private JSONRestconfServiceRfc8040Impl service;
 
     @BeforeClass
@@ -181,7 +185,7 @@ public class JSONRestconfServiceRfc8040ImplTest {
         ServicesWrapperImpl.getInstance().setHandlers(mockSchemaContextHandler, mountPointServiceHandler,
                 txChainHandler, new DOMDataBrokerHandler(mockDOMDataBroker),
                 new RpcServiceHandler(mockRpcService),
-                new NotificationServiceHandler(mock(DOMNotificationService.class)));
+                new NotificationServiceHandler(mock(DOMNotificationService.class)), domSchemaService);
 
         service = new JSONRestconfServiceRfc8040Impl(ServicesWrapperImpl.getInstance(), mountPointServiceHandler);
     }
@@ -278,14 +282,15 @@ public class JSONRestconfServiceRfc8040ImplTest {
         final ContainerNode actualNode = (ContainerNode) capturedNode.getValue();
         assertEquals("ContainerNode node type", INTERFACES_QNAME, actualNode.getNodeType());
 
-        final Optional<DataContainerChild<?, ?>> mapChild = actualNode.getChild(new NodeIdentifier(INTERFACE_QNAME));
+        final java.util.Optional<DataContainerChild<?, ?>> mapChild = actualNode.getChild(
+            new NodeIdentifier(INTERFACE_QNAME));
         assertEquals(INTERFACE_QNAME.toString() + " present", true, mapChild.isPresent());
         assertTrue("Expected MapNode. Actual " + mapChild.get().getClass(), mapChild.get() instanceof MapNode);
         final MapNode mapNode = (MapNode)mapChild.get();
 
         final NodeIdentifierWithPredicates entryNodeID = new NodeIdentifierWithPredicates(
                 INTERFACE_QNAME, NAME_QNAME, "eth0");
-        final Optional<MapEntryNode> entryChild = mapNode.getChild(entryNodeID);
+        final java.util.Optional<MapEntryNode> entryChild = mapNode.getChild(entryNodeID);
         assertEquals(entryNodeID.toString() + " present", true, entryChild.isPresent());
         final MapEntryNode entryNode = entryChild.get();
         verifyLeafNode(entryNode, NAME_QNAME, "eth0");
@@ -321,7 +326,7 @@ public class JSONRestconfServiceRfc8040ImplTest {
     }
 
     @Test(expected = TransactionCommitFailedException.class)
-    @SuppressWarnings("checkstyle:IllegalThrows")
+    @SuppressWarnings({ "checkstyle:IllegalThrows", "checkstyle:avoidHidingCauseException" })
     public void testPostFailure() throws Throwable {
         doReturn(Futures.immediateFailedCheckedFuture(new TransactionCommitFailedException("mock")))
                 .when(mockReadWriteTx).submit();
@@ -335,6 +340,78 @@ public class JSONRestconfServiceRfc8040ImplTest {
             assertNotNull(e.getCause());
             throw e.getCause();
         }
+    }
+
+    @SuppressWarnings("rawtypes")
+    @Test
+    public void testPatch() throws Exception {
+        final String uriPath = "ietf-interfaces:interfaces/interface=eth0";
+        final String payload = loadData("/parts/ietf-interfaces_interfaces_patch.json");
+
+        final Optional<String> patchResult = this.service.patch(uriPath, payload);
+
+        final ArgumentCaptor<YangInstanceIdentifier> capturedPath =
+                ArgumentCaptor.forClass(YangInstanceIdentifier.class);
+        final ArgumentCaptor<NormalizedNode> capturedNode = ArgumentCaptor.forClass(NormalizedNode.class);
+
+        verify(mockReadWriteTx).put(eq(LogicalDatastoreType.CONFIGURATION), capturedPath.capture(),
+                capturedNode.capture());
+
+        verifyPath(capturedPath.getValue(), INTERFACES_QNAME, INTERFACE_QNAME,
+                new Object[]{INTERFACE_QNAME, NAME_QNAME, "eth0"});
+
+        assertTrue("Expected MapEntryNode. Actual " + capturedNode.getValue().getClass(),
+                capturedNode.getValue() instanceof MapEntryNode);
+        final MapEntryNode actualNode = (MapEntryNode) capturedNode.getValue();
+        assertEquals("MapEntryNode node type", INTERFACE_QNAME, actualNode.getNodeType());
+        verifyLeafNode(actualNode, NAME_QNAME, "eth0");
+        verifyLeafNode(actualNode, TYPE_QNAME, "ethernetCsmacd");
+        verifyLeafNode(actualNode, ENABLED_QNAME, Boolean.FALSE);
+        verifyLeafNode(actualNode, DESC_QNAME, "some interface");
+        assertTrue(patchResult.get().contains("\"ok\":[null]"));
+    }
+
+    @SuppressWarnings("rawtypes")
+    @Test
+    public void testPatchBehindMountPoint() throws Exception {
+        setupTestMountPoint();
+
+        final String uriPath = "ietf-interfaces:interfaces/yang-ext:mount/test-module:cont/cont1";
+        final String payload = loadData("/full-versions/testCont1DataPatch.json");
+
+        final Optional<String> patchResult = this.service.patch(uriPath, payload);
+
+        final ArgumentCaptor<YangInstanceIdentifier> capturedPath =
+                ArgumentCaptor.forClass(YangInstanceIdentifier.class);
+        final ArgumentCaptor<NormalizedNode> capturedNode = ArgumentCaptor.forClass(NormalizedNode.class);
+
+        verify(mockReadWriteTx).put(eq(LogicalDatastoreType.CONFIGURATION), capturedPath.capture(),
+                capturedNode.capture());
+
+        verifyPath(capturedPath.getValue(), TEST_CONT_QNAME, TEST_CONT1_QNAME);
+
+        assertTrue("Expected ContainerNode", capturedNode.getValue() instanceof ContainerNode);
+        final ContainerNode actualNode = (ContainerNode) capturedNode.getValue();
+        assertEquals("ContainerNode node type", TEST_CONT1_QNAME, actualNode.getNodeType());
+        verifyLeafNode(actualNode, TEST_LF11_QNAME, "lf11 data");
+        verifyLeafNode(actualNode, TEST_LF12_QNAME, "lf12 data");
+        assertTrue(patchResult.get().contains("\"ok\":[null]"));
+    }
+
+    @Test
+    @SuppressWarnings("checkstyle:IllegalThrows")
+    public void testPatchFailure() throws Throwable {
+        doReturn(Futures.immediateFailedCheckedFuture(new TransactionCommitFailedException("mock")))
+                .when(mockReadWriteTx).submit();
+
+        final String uriPath = "ietf-interfaces:interfaces/interface=eth0";
+
+        final String payload = loadData("/parts/ietf-interfaces_interfaces_patch.json");
+
+        final Optional<String> patchResult = this.service.patch(uriPath, payload);
+        assertTrue("Patch output is not null", patchResult.isPresent());
+        String patch = patchResult.get();
+        assertTrue(patch.contains("TransactionCommitFailedException"));
     }
 
     @Test
@@ -505,7 +582,7 @@ public class JSONRestconfServiceRfc8040ImplTest {
     }
 
     void verifyLeafNode(final DataContainerNode<?> parent, final QName leafType, final Object leafValue) {
-        final Optional<DataContainerChild<?, ?>> leafChild = parent.getChild(new NodeIdentifier(leafType));
+        final java.util.Optional<DataContainerChild<?, ?>> leafChild = parent.getChild(new NodeIdentifier(leafType));
         assertEquals(leafType.toString() + " present", true, leafChild.isPresent());
         assertEquals(leafType.toString() + " value", leafValue, leafChild.get().getValue());
     }

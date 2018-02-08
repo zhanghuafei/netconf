@@ -50,7 +50,7 @@ import org.w3c.dom.Element;
 abstract class AbstractNotificationsData {
     private static final Logger LOG = LoggerFactory.getLogger(AbstractNotificationsData.class);
     private static final TransformerFactory TF = TransformerFactory.newInstance();
-    private static final XMLOutputFactory OF = XMLOutputFactory.newFactory();
+    private static final XMLOutputFactory OF = XMLOutputFactory.newInstance();
 
     private TransactionChainHandler transactionChainHandler;
     protected SchemaContextHandler schemaHandler;
@@ -66,6 +66,7 @@ abstract class AbstractNotificationsData {
      *            {@link MonitoringModule#PATH_TO_STREAM_WITHOUT_KEY} to
      *            {@link YangInstanceIdentifier}
      */
+    @SuppressWarnings("checkstyle:hiddenField")
     public void setCloseVars(final TransactionChainHandler transactionChainHandler,
             final SchemaContextHandler schemaHandler) {
         this.transactionChainHandler = transactionChainHandler;
@@ -88,6 +89,7 @@ abstract class AbstractNotificationsData {
      * @param localName
      *            local name
      */
+    @SuppressWarnings("checkstyle:hiddenField")
     protected void setLocalNameOfPath(final String localName) {
         this.localName = localName;
     }

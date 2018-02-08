@@ -20,6 +20,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map.Entry;
 import javax.annotation.Nonnull;
+import javax.ws.rs.Path;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriInfo;
 import org.opendaylight.controller.md.sal.dom.api.DOMDataBroker;
@@ -48,6 +49,8 @@ import org.opendaylight.restconf.nb.rfc8040.rests.utils.ReadDataTransactionUtil;
 import org.opendaylight.restconf.nb.rfc8040.rests.utils.RestconfDataServiceConstant;
 import org.opendaylight.restconf.nb.rfc8040.utils.RestconfConstants;
 import org.opendaylight.restconf.nb.rfc8040.utils.parser.ParserIdentifier;
+import org.opendaylight.yangtools.yang.common.QName;
+import org.opendaylight.yangtools.yang.common.Revision;
 import org.opendaylight.yangtools.yang.data.api.schema.NormalizedNode;
 import org.opendaylight.yangtools.yang.model.api.SchemaNode;
 import org.slf4j.Logger;
@@ -56,14 +59,15 @@ import org.slf4j.LoggerFactory;
 /**
  * Implementation of {@link RestconfDataService}.
  */
+@Path("/")
 public class RestconfDataServiceImpl implements RestconfDataService {
 
     private static final Logger LOG = LoggerFactory.getLogger(RestconfDataServiceImpl.class);
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MMM-dd HH:mm:ss");
 
-    private final SchemaContextHandler schemaContextHandler;
-    private final TransactionChainHandler transactionChainHandler;
-    private final DOMMountPointServiceHandler mountPointServiceHandler;
+    private SchemaContextHandler schemaContextHandler;
+    private TransactionChainHandler transactionChainHandler;
+    private DOMMountPointServiceHandler mountPointServiceHandler;
 
     private final RestconfStreamsSubscriptionService delegRestconfSubscrService;
 
@@ -75,6 +79,19 @@ public class RestconfDataServiceImpl implements RestconfDataService {
         this.transactionChainHandler = transactionChainHandler;
         this.mountPointServiceHandler = mountPointServiceHandler;
         this.delegRestconfSubscrService = delegRestconfSubscrService;
+    }
+
+    @Override
+    public synchronized void updateHandlers(final Object... handlers) {
+        for (final Object object : handlers) {
+            if (object instanceof SchemaContextHandler) {
+                schemaContextHandler = (SchemaContextHandler) object;
+            } else if (object instanceof DOMMountPointServiceHandler) {
+                mountPointServiceHandler = (DOMMountPointServiceHandler) object;
+            } else if (object instanceof TransactionChainHandler) {
+                transactionChainHandler = (TransactionChainHandler) object;
+            }
+        }
     }
 
     @Override
@@ -148,12 +165,13 @@ public class RestconfDataServiceImpl implements RestconfDataService {
                     RestconfError.ErrorTag.DATA_MISSING);
         }
 
-        if ((parameters.getContent().equals(RestconfDataServiceConstant.ReadData.ALL))
+        if (parameters.getContent().equals(RestconfDataServiceConstant.ReadData.ALL)
                     || parameters.getContent().equals(RestconfDataServiceConstant.ReadData.CONFIG)) {
+            final QName type = node.getNodeType();
             return Response.status(200)
                     .entity(new NormalizedNodeContext(instanceIdentifier, node, parameters))
-                    .header("ETag", '"' + node.getNodeType().getModule().getFormattedRevision()
-                        + node.getNodeType().getLocalName() + '"')
+                    .header("ETag", '"' + type.getModule().getRevision().map(Revision::toString).orElse(null)
+                        + type.getLocalName() + '"')
                     .header("Last-Modified", FORMATTER.format(LocalDateTime.now(Clock.systemUTC())))
                     .build();
         }

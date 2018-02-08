@@ -26,6 +26,7 @@ import org.opendaylight.controller.md.sal.dom.api.DOMMountPoint;
 import org.opendaylight.controller.md.sal.dom.api.DOMMountPointService;
 import org.opendaylight.controller.md.sal.dom.broker.impl.mount.DOMMountPointServiceImpl;
 import org.opendaylight.controller.md.sal.dom.broker.spi.mount.SimpleDOMMountPoint;
+import org.opendaylight.mdsal.dom.api.DOMYangTextSourceProvider;
 import org.opendaylight.restconf.common.errors.RestconfDocumentedException;
 import org.opendaylight.restconf.common.errors.RestconfError;
 import org.opendaylight.restconf.common.schema.SchemaExportContext;
@@ -35,7 +36,7 @@ import org.opendaylight.restconf.nb.rfc8040.handlers.SchemaContextHandler;
 import org.opendaylight.restconf.nb.rfc8040.services.simple.api.RestconfSchemaService;
 import org.opendaylight.restconf.nb.rfc8040.utils.RestconfConstants;
 import org.opendaylight.yangtools.yang.common.QName;
-import org.opendaylight.yangtools.yang.common.SimpleDateFormatUtil;
+import org.opendaylight.yangtools.yang.common.Revision;
 import org.opendaylight.yangtools.yang.data.api.YangInstanceIdentifier;
 import org.opendaylight.yangtools.yang.model.api.Module;
 import org.opendaylight.yangtools.yang.model.api.SchemaContext;
@@ -63,6 +64,8 @@ public class RestconfSchemaServiceTest {
     private SchemaContextHandler mockContextHandler;
     @Mock
     private DOMMountPointServiceHandler mockMountPointHandler;
+    @Mock
+    private DOMYangTextSourceProvider sourceProvider;
 
     // schema context with modules
     private SchemaContext schemaContext;
@@ -82,11 +85,11 @@ public class RestconfSchemaServiceTest {
     public void setup() throws Exception {
         MockitoAnnotations.initMocks(this);
 
-        this.schemaContext = YangParserTestUtils.parseYangSources(TestRestconfUtils.loadFiles("/modules"));
+        this.schemaContext = YangParserTestUtils.parseYangFiles(TestRestconfUtils.loadFiles("/modules"));
         this.schemaContextBehindMountPoint = YangParserTestUtils
-                .parseYangSources(TestRestconfUtils.loadFiles("/modules/modules-behind-mount-point"));
+                .parseYangFiles(TestRestconfUtils.loadFiles("/modules/modules-behind-mount-point"));
         this.schemaContextWithMountPoints =
-                YangParserTestUtils.parseYangSources(TestRestconfUtils.loadFiles("/modules/mount-points"));
+                YangParserTestUtils.parseYangFiles(TestRestconfUtils.loadFiles("/modules/mount-points"));
 
         // create and register mount points
         this.mountPoint = SimpleDOMMountPoint.create(
@@ -106,7 +109,8 @@ public class RestconfSchemaServiceTest {
         ((DOMMountPointServiceImpl) this.mountPointService).registerMountPoint(this.mountPointWithNullSchemaContext);
         when(this.mockMountPointHandler.get()).thenReturn(this.mountPointService);
 
-        this.schemaService = new RestconfSchemaServiceImpl(this.mockContextHandler, this.mockMountPointHandler);
+        this.schemaService = new RestconfSchemaServiceImpl(this.mockContextHandler, this.mockMountPointHandler,
+                sourceProvider);
     }
 
     /**
@@ -135,8 +139,7 @@ public class RestconfSchemaServiceTest {
         assertNotNull("Existing module should be found", module);
 
         assertEquals("Not expected module name", "module1", module.getName());
-        assertEquals("Not expected module revision", "2014-01-01",
-                SimpleDateFormatUtil.getRevisionFormat().format(module.getRevision()));
+        assertEquals("Not expected module revision", Revision.ofNullable("2014-01-01"), module.getRevision());
         assertEquals("Not expected module namespace", "module:1", module.getNamespace().toString());
     }
 
@@ -176,8 +179,7 @@ public class RestconfSchemaServiceTest {
         assertNotNull("Existing module should be found", module);
 
         assertEquals("Not expected module name", "module1-behind-mount-point", module.getName());
-        assertEquals("Not expected module revision", "2014-02-03",
-                SimpleDateFormatUtil.getRevisionFormat().format(module.getRevision()));
+        assertEquals("Not expected module revision", Revision.ofNullable("2014-02-03"), module.getRevision());
         assertEquals("Not expected module namespace", "module:1:behind:mount:point", module.getNamespace().toString());
     }
 

@@ -12,6 +12,7 @@ import com.google.common.collect.ImmutableSet;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Set;
+import javax.ws.rs.Path;
 import javax.ws.rs.core.UriInfo;
 import org.opendaylight.controller.md.sal.dom.api.DOMMountPoint;
 import org.opendaylight.restconf.common.context.InstanceIdentifierContext;
@@ -25,6 +26,7 @@ import org.opendaylight.restconf.nb.rfc8040.references.SchemaContextRef;
 import org.opendaylight.restconf.nb.rfc8040.services.simple.api.RestconfOperationsService;
 import org.opendaylight.restconf.nb.rfc8040.utils.RestconfConstants;
 import org.opendaylight.restconf.nb.rfc8040.utils.parser.ParserIdentifier;
+import org.opendaylight.yangtools.yang.common.Empty;
 import org.opendaylight.yangtools.yang.data.api.YangInstanceIdentifier.NodeIdentifier;
 import org.opendaylight.yangtools.yang.data.api.schema.ContainerNode;
 import org.opendaylight.yangtools.yang.data.impl.schema.Builders;
@@ -42,12 +44,13 @@ import org.slf4j.LoggerFactory;
  * Implementation of {@link RestconfOperationsService}.
  *
  */
+@Path("/")
 public class RestconfOperationsServiceImpl implements RestconfOperationsService {
 
     private static final Logger LOG = LoggerFactory.getLogger(RestconfOperationsServiceImpl.class);
 
-    private final SchemaContextHandler schemaContextHandler;
-    private final DOMMountPointServiceHandler domMountPointServiceHandler;
+    private SchemaContextHandler schemaContextHandler;
+    private DOMMountPointServiceHandler domMountPointServiceHandler;
 
     /**
      * Set {@link SchemaContextHandler} for getting actual {@link SchemaContext}.
@@ -61,6 +64,17 @@ public class RestconfOperationsServiceImpl implements RestconfOperationsService 
             final DOMMountPointServiceHandler domMountPointServiceHandler) {
         this.schemaContextHandler = schemaContextHandler;
         this.domMountPointServiceHandler = domMountPointServiceHandler;
+    }
+
+    @Override
+    public synchronized void updateHandlers(final Object... handlers) {
+        for (final Object object : handlers) {
+            if (object instanceof SchemaContextHandler) {
+                schemaContextHandler = (SchemaContextHandler) object;
+            } else if (object instanceof DOMMountPointServiceHandler) {
+                domMountPointServiceHandler = (DOMMountPointServiceHandler) object;
+            }
+        }
     }
 
     @Override
@@ -121,7 +135,7 @@ public class RestconfOperationsServiceImpl implements RestconfOperationsService 
                 Builders.containerBuilder(fakeCont);
 
         for (final LeafSchemaNode leaf : fakeRpcSchema) {
-            containerBuilder.withChild(Builders.leafBuilder(leaf).build());
+            containerBuilder.withChild(Builders.leafBuilder(leaf).withValue(Empty.getInstance()).build());
         }
 
         final Collection<Module> fakeModules = new ArrayList<>(neededModules.size() + 1);

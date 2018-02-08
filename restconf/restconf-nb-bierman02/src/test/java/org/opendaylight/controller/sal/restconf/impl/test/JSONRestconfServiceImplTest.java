@@ -29,6 +29,7 @@ import com.google.common.util.concurrent.Futures;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import javax.ws.rs.core.Response.Status;
@@ -50,6 +51,9 @@ import org.opendaylight.netconf.sal.restconf.impl.ControllerContext;
 import org.opendaylight.netconf.sal.restconf.impl.JSONRestconfServiceImpl;
 import org.opendaylight.netconf.sal.restconf.impl.PutResult;
 import org.opendaylight.netconf.sal.restconf.impl.RestconfImpl;
+import org.opendaylight.restconf.common.patch.PatchContext;
+import org.opendaylight.restconf.common.patch.PatchStatusContext;
+import org.opendaylight.restconf.common.patch.PatchStatusEntity;
 import org.opendaylight.yangtools.yang.common.OperationFailedException;
 import org.opendaylight.yangtools.yang.common.QName;
 import org.opendaylight.yangtools.yang.data.api.YangInstanceIdentifier;
@@ -229,14 +233,15 @@ public class JSONRestconfServiceImplTest {
         final ContainerNode actualNode = (ContainerNode) capturedNode.getValue();
         assertEquals("ContainerNode node type", INTERFACES_QNAME, actualNode.getNodeType());
 
-        final Optional<DataContainerChild<?, ?>> mapChild = actualNode.getChild(new NodeIdentifier(INTERFACE_QNAME));
+        final java.util.Optional<DataContainerChild<?, ?>> mapChild = actualNode.getChild(
+            new NodeIdentifier(INTERFACE_QNAME));
         assertEquals(INTERFACE_QNAME.toString() + " present", true, mapChild.isPresent());
         assertTrue("Expected MapNode. Actual " + mapChild.get().getClass(), mapChild.get() instanceof MapNode);
         final MapNode mapNode = (MapNode)mapChild.get();
 
         final NodeIdentifierWithPredicates entryNodeID = new NodeIdentifierWithPredicates(
                 INTERFACE_QNAME, NAME_QNAME, "eth0");
-        final Optional<MapEntryNode> entryChild = mapNode.getChild(entryNodeID);
+        final java.util.Optional<MapEntryNode> entryChild = mapNode.getChild(entryNodeID);
         assertEquals(entryNodeID.toString() + " present", true, entryChild.isPresent());
         final MapEntryNode entryNode = entryChild.get();
         verifyLeafNode(entryNode, NAME_QNAME, "eth0");
@@ -274,7 +279,7 @@ public class JSONRestconfServiceImplTest {
     }
 
     @Test(expected = TransactionCommitFailedException.class)
-    @SuppressWarnings("checkstyle:IllegalThrows")
+    @SuppressWarnings({ "checkstyle:IllegalThrows", "checkstyle:avoidHidingCauseException" })
     public void testPostFailure() throws Throwable {
         doReturn(Futures.immediateFailedCheckedFuture(new TransactionCommitFailedException("mock"))).when(brokerFacade)
                 .commitConfigurationDataPost(any(SchemaContext.class), any(YangInstanceIdentifier.class),
@@ -289,6 +294,74 @@ public class JSONRestconfServiceImplTest {
             assertNotNull(e.getCause());
             throw e.getCause();
         }
+    }
+
+    @SuppressWarnings("rawtypes")
+    @Test
+    public void testPatch() throws Exception {
+        final PatchStatusContext result = mock(PatchStatusContext.class);
+        when(brokerFacade.patchConfigurationDataWithinTransaction(notNull(PatchContext.class)))
+            .thenReturn(result);
+
+        List<PatchStatusEntity> patchSTatus = new ArrayList<>();
+
+        PatchStatusEntity entity = new PatchStatusEntity("edit1", true, null);
+
+        patchSTatus.add(entity);
+
+        when(result.getEditCollection())
+                .thenReturn(patchSTatus);
+        when(result.getGlobalErrors()).thenReturn(new ArrayList<>());
+        when(result.getPatchId()).thenReturn("1");
+        final String uriPath = "ietf-interfaces:interfaces/interface/eth0";
+        final String payload = loadData("/parts/ietf-interfaces_interfaces_patch.json");
+        final Optional<String> patchResult = this.service.patch(uriPath, payload);
+
+        assertTrue(patchResult.get().contains("\"ok\":[null]"));
+    }
+
+    @SuppressWarnings("rawtypes")
+    @Test
+    public void testPatchBehindMountPoint() throws Exception {
+        final DOMMountPoint mockMountPoint = setupTestMountPoint();
+        final PatchStatusContext result = mock(PatchStatusContext.class);
+        when(brokerFacade.patchConfigurationDataWithinTransaction(notNull(PatchContext.class)))
+            .thenReturn(result);
+
+        List<PatchStatusEntity> patchSTatus = new ArrayList<>();
+
+        PatchStatusEntity entity = new PatchStatusEntity("edit1", true, null);
+
+        patchSTatus.add(entity);
+
+        when(result.getEditCollection())
+                .thenReturn(patchSTatus);
+        when(result.getGlobalErrors()).thenReturn(new ArrayList<>());
+        when(result.getPatchId()).thenReturn("1");
+
+        final String uriPath = "ietf-interfaces:interfaces/yang-ext:mount/test-module:cont/cont1";
+        final String payload = loadData("/full-versions/testCont1DataPatch.json");
+
+        final Optional<String> patchResult = this.service.patch(uriPath, payload);
+
+        assertTrue(patchResult.get().contains("\"ok\":[null]"));
+    }
+
+    @Test(expected = OperationFailedException.class)
+    @SuppressWarnings("checkstyle:IllegalThrows")
+    public void testPatchFailure() throws Throwable {
+        final PatchStatusContext result = mock(PatchStatusContext.class);
+        when(brokerFacade.patchConfigurationDataWithinTransaction(notNull(PatchContext.class)))
+            .thenThrow(new TransactionCommitFailedException("Transaction failed"));
+
+        final String uriPath = "ietf-interfaces:interfaces/interface/eth0";
+        final String payload = loadData("/parts/ietf-interfaces_interfaces_patch.json");
+
+        final Optional<String> patchResult = this.service.patch(uriPath, payload);
+
+        assertTrue("Patch output is not null", patchResult.isPresent());
+        String patch = patchResult.get();
+        assertTrue(patch.contains("TransactionCommitFailedException"));
     }
 
     @Test
@@ -468,7 +541,7 @@ public class JSONRestconfServiceImplTest {
     }
 
     void verifyLeafNode(final DataContainerNode<?> parent, final QName leafType, final Object leafValue) {
-        final Optional<DataContainerChild<?, ?>> leafChild = parent.getChild(new NodeIdentifier(leafType));
+        final java.util.Optional<DataContainerChild<?, ?>> leafChild = parent.getChild(new NodeIdentifier(leafType));
         assertEquals(leafType.toString() + " present", true, leafChild.isPresent());
         assertEquals(leafType.toString() + " value", leafValue, leafChild.get().getValue());
     }

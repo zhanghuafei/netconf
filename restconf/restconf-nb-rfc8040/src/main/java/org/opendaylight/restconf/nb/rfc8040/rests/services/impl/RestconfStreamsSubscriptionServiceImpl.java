@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
 import javax.annotation.Nonnull;
+import javax.ws.rs.Path;
 import javax.ws.rs.core.UriInfo;
 import org.opendaylight.controller.md.sal.dom.api.DOMDataBroker;
 import org.opendaylight.controller.md.sal.dom.api.DOMNotificationService;
@@ -42,11 +43,12 @@ import org.slf4j.LoggerFactory;
  * Implementation of {@link RestconfStreamsSubscriptionService}.
  *
  */
+@Path("/")
 public class RestconfStreamsSubscriptionServiceImpl implements RestconfStreamsSubscriptionService {
 
     private static final Logger LOG = LoggerFactory.getLogger(RestconfStreamsSubscriptionServiceImpl.class);
 
-    private final HandlersHolder handlersHolder;
+    private HandlersHolder handlersHolder;
 
     /**
      * Initialize holder of handlers with holders as parameters.
@@ -65,6 +67,15 @@ public class RestconfStreamsSubscriptionServiceImpl implements RestconfStreamsSu
             final TransactionChainHandler transactionChainHandler) {
         this.handlersHolder = new HandlersHolder(domDataBrokerHandler, notificationServiceHandler,
                 transactionChainHandler, schemaHandler);
+    }
+
+    @Override
+    public synchronized void updateHandlers(final Object... handlers) {
+        for (final Object object : handlers) {
+            if (object instanceof HandlersHolder) {
+                handlersHolder = (HandlersHolder) object;
+            }
+        }
     }
 
     @Override

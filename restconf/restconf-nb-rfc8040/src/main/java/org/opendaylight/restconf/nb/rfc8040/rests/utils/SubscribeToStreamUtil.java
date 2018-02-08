@@ -113,7 +113,7 @@ public final class SubscribeToStreamUtil {
         } else {
             listeners = pickSpecificListenerByOutput(listeners, NotificationOutputType.XML.getName());
         }
-        if ((listeners == null) || listeners.isEmpty()) {
+        if (listeners == null || listeners.isEmpty()) {
             throw new RestconfDocumentedException("Stream was not found.", ErrorType.PROTOCOL,
                     ErrorTag.UNKNOWN_ELEMENT);
         }
@@ -163,7 +163,7 @@ public final class SubscribeToStreamUtil {
     public static InstanceIdentifierContext<?> prepareIIDSubsStreamOutput(final SchemaContextHandler schemaHandler) {
         final QName qnameBase = QName.create("subscribe:to:notification", "2016-10-28", "notifi");
         final DataSchemaNode location = ((ContainerSchemaNode) schemaHandler.get()
-                .findModuleByNamespaceAndRevision(qnameBase.getNamespace(), qnameBase.getRevision())
+                .findModule(qnameBase.getModule()).get()
                 .getDataChildByName(qnameBase)).getDataChildByName(QName.create(qnameBase, "location"));
         final List<PathArgument> path = new ArrayList<>();
         path.add(NodeIdentifier.create(qnameBase));
@@ -238,9 +238,7 @@ public final class SubscribeToStreamUtil {
     }
 
     public static Module getMonitoringModule(final SchemaContext schemaContext) {
-        final Module monitoringModule =
-                schemaContext.findModuleByNamespaceAndRevision(MonitoringModule.URI_MODULE, MonitoringModule.DATE);
-        return monitoringModule;
+        return schemaContext.findModule(MonitoringModule.MODULE_QNAME).orElse(null);
     }
 
     /**
@@ -306,13 +304,11 @@ public final class SubscribeToStreamUtil {
     }
 
     static URI prepareUriByStreamName(final UriInfo uriInfo, final String streamName) {
-        final int port = SubscribeToStreamUtil.prepareNotificationPort();
+        final UriBuilder uriBuilder = uriInfo.getBaseUriBuilder();
 
-        final UriBuilder uriBuilder = uriInfo.getAbsolutePathBuilder();
-        final UriBuilder uriToWebSocketServer =
-                uriBuilder.port(port).scheme(RestconfStreamsConstants.SCHEMA_SUBSCIBRE_URI);
-        final URI uri = uriToWebSocketServer.replacePath(streamName).build();
-        return uri;
+        prepareNotificationPort(uriInfo.getBaseUri().getPort());
+        uriBuilder.scheme(RestconfStreamsConstants.SCHEMA_SUBSCIBRE_URI);
+        return uriBuilder.replacePath(streamName).build();
     }
 
     /**
@@ -345,17 +341,15 @@ public final class SubscribeToStreamUtil {
     /**
      * Get port from web socket server. If doesn't exit, create it.
      *
-     * @return port
+     * @param port
+     *            - port
      */
-    private static int prepareNotificationPort() {
-        int port = RestconfStreamsConstants.NOTIFICATION_PORT;
+    private static void prepareNotificationPort(final int port) {
         try {
-            final WebSocketServer webSocketServer = WebSocketServer.getInstance();
-            port = webSocketServer.getPort();
+            WebSocketServer.getInstance();
         } catch (final NullPointerException e) {
-            WebSocketServer.createInstance(RestconfStreamsConstants.NOTIFICATION_PORT);
+            WebSocketServer.createInstance(port);
         }
-        return port;
     }
 
     static boolean checkExist(final SchemaContext schemaContext,
@@ -393,7 +387,7 @@ public final class SubscribeToStreamUtil {
      * @return enum
      */
     private static <T> T parseURIEnum(final Class<T> clazz, final String value) {
-        if ((value == null) || value.equals("")) {
+        if (value == null || value.equals("")) {
             return null;
         }
         return ResolveEnumUtil.resolveEnum(clazz, value);

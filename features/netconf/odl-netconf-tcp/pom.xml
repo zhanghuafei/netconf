@@ -14,7 +14,7 @@
     <parent>
         <groupId>org.opendaylight.odlparent</groupId>
         <artifactId>single-feature-parent</artifactId>
-        <version>2.0.5</version>
+        <version>3.0.2</version>
         <relativePath/>
     </parent>
 
@@ -26,7 +26,6 @@
     <name>OpenDaylight :: Netconf Connector :: TCP</name>
 
     <dependencies>
-        <!-- This is pulled in via feature.xml directly for now (until we can configure prerequisites here
         <dependency>
             <groupId>${project.groupId}</groupId>
             <artifactId>odl-netconf-util</artifactId>
@@ -34,7 +33,6 @@
             <type>xml</type>
             <classifier>features</classifier>
         </dependency>
-        -->
         <dependency>
             <groupId>${project.groupId}</groupId>
             <artifactId>odl-netconf-impl</artifactId>
