@@ -168,39 +168,28 @@ public abstract class AbstractWriteTx implements DOMDataWriteTransaction {
 
     protected abstract void editConfig(final YangInstanceIdentifier path, final Optional<NormalizedNode<?, ?>> data, final DataContainerChild<?, ?> editStructure, final Optional<ModifyAction> defaultOperation, final String operation);
 
-    protected ListenableFuture<RpcResult<TransactionStatus>> resultsToTxStatus() {
-        final SettableFuture<RpcResult<TransactionStatus>> transformed = SettableFuture.create();
-
+    protected ListenableFuture<RpcResult<Void>> resultsToTxStatus() {
+        
+        final SettableFuture<RpcResult<Void>> transformed = SettableFuture.create();
         Futures.addCallback(Futures.allAsList(resultsFutures), new FutureCallback<List<DOMRpcResult>>() {
             @Override
-					public void onSuccess(final List<DOMRpcResult> domRpcResults) {
-						domRpcResults.forEach(domRpcResult -> {
-							if (!domRpcResult.getErrors().isEmpty()
-									&& !transformed.isDone()) {
-								RpcResult<TransactionStatus> result = RpcResultBuilder
-										.<TransactionStatus> failed()
-										.withResult(TransactionStatus.FAILED)
-										.withRpcErrors(domRpcResult.getErrors())
-										.build();
-								transformed.set(result);
-							}
-						});
+            public void onSuccess(final List<DOMRpcResult> domRpcResults) {
+                domRpcResults.forEach(domRpcResult -> {
+                    if (!domRpcResult.getErrors().isEmpty() && !transformed.isDone()) {
+                        RpcResult<Void> result =
+                                RpcResultBuilder.<Void>failed().withRpcErrors(domRpcResult.getErrors()).build();
+                        transformed.set(result);
+                    }
+                });
 
-                if(!transformed.isDone()) {
-                    transformed.set(RpcResultBuilder.success(TransactionStatus.COMMITED).build());
+                if (!transformed.isDone()) {
+                    transformed.set(RpcResultBuilder.<Void>success().build());
                 }
             }
 
             @Override
             public void onFailure(final Throwable throwable) {
-                final NetconfDocumentedException exception =
-                        new NetconfDocumentedException(
-                                id + ":RPC during tx returned an exception",
-                                new Exception(throwable),
-                                DocumentedException.ErrorType.APPLICATION,
-                                DocumentedException.ErrorTag.OPERATION_FAILED,
-                                DocumentedException.ErrorSeverity.ERROR);
-                transformed.setException(exception);
+                transformed.setException(throwable);
             }
         });
 
