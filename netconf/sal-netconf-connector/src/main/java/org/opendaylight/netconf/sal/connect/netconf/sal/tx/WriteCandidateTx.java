@@ -15,16 +15,20 @@ import com.google.common.util.concurrent.CheckedFuture;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.SettableFuture;
 
 import javax.annotation.Nullable;
 
+import org.opendaylight.controller.config.util.xml.DocumentedException;
 import org.opendaylight.controller.md.sal.common.api.TransactionStatus;
 import org.opendaylight.controller.md.sal.common.api.data.TransactionCommitFailedException;
 import org.opendaylight.controller.md.sal.dom.api.DOMRpcResult;
+import org.opendaylight.netconf.api.NetconfDocumentedException;
 import org.opendaylight.netconf.sal.connect.netconf.util.NetconfBaseOps;
 import org.opendaylight.netconf.sal.connect.netconf.util.NetconfRpcFutureCallback;
 import org.opendaylight.netconf.sal.connect.util.RemoteDeviceId;
 import org.opendaylight.yangtools.yang.common.RpcResult;
+import org.opendaylight.yangtools.yang.common.RpcResultBuilder;
 import org.opendaylight.yangtools.yang.data.api.ModifyAction;
 import org.opendaylight.yangtools.yang.data.api.YangInstanceIdentifier;
 import org.opendaylight.yangtools.yang.data.api.schema.DataContainerChild;
@@ -116,11 +120,10 @@ public class WriteCandidateTx extends AbstractWriteTx {
             }
         });
     	
-    	
         final ListenableFuture<Void> commitFutureAsVoid = Futures.transform(txResult, new Function<RpcResult<TransactionStatus>, Void>() {
             @Override
-            public Void apply(final RpcResult<TransactionStatus> input) {
-                Preconditions.checkArgument(input.isSuccessful() && input.getErrors().isEmpty(), "Submit of transaction " + getIdentifier() + " failed with error: %s", input.getErrors());
+            public Void apply(final RpcResult<TransactionStatus> input) { // Transform response with error to exception 
+                Preconditions.checkArgument(input.isSuccessful() && input.getErrors().isEmpty(), "Transaction " + getIdentifier() + " failed with error: %s", input.getErrors());
                 return null;
             }
         });
@@ -133,7 +136,7 @@ public class WriteCandidateTx extends AbstractWriteTx {
                 IllegalArgumentException exception = (IllegalArgumentException) input.getCause();
                 return new TransactionCommitFailedException(exception.getMessage(), input);
               }
-                return new TransactionCommitFailedException("Submit of transaction " + getIdentifier() + " failed", input);
+                return new TransactionCommitFailedException("Transaction " + getIdentifier() + " failed", input);
             }
         });
     }
@@ -145,11 +148,62 @@ public class WriteCandidateTx extends AbstractWriteTx {
         netOps.discardChanges(new NetconfRpcFutureCallback("Discarding candidate", id));
     }
 
+    @SuppressWarnings("deprecation")
     @Override
-    public synchronized ListenableFuture<RpcResult<TransactionStatus>> performCommit() {
-        resultsFutures.add(netOps.commit(new NetconfRpcFutureCallback("Commit", id)));
-        final ListenableFuture<RpcResult<TransactionStatus>> txResult = resultsToTxStatus();
-        return txResult;
+    public synchronized ListenableFuture<RpcResult<TransactionStatus>> performCommit() { 
+        final ListenableFuture<RpcResult<Void>> editConfigResults = resultsToTxStatus(); 
+        final SettableFuture<RpcResult<TransactionStatus>> txResult = SettableFuture.create();
+        
+        Futures.addCallback(editConfigResults, new FutureCallback<RpcResult<Void>>() { 
+            
+            @Override
+            public void onSuccess(RpcResult<Void> editResult) { 
+                if (editResult.isSuccessful()) {
+                    Futures.addCallback(netOps.commit(new NetconfRpcFutureCallback("Commit", id)),
+                            new FutureCallback<DOMRpcResult>() {
+
+                                @Override
+                                public void onSuccess(DOMRpcResult commitResult) { 
+                                    if (!commitResult.getErrors().isEmpty()) {
+                                        txResult.set(RpcResultBuilder.success(TransactionStatus.COMMITED).build());
+                                    } else {
+                                        txResult.set(RpcResultBuilder.<TransactionStatus>failed()
+                                                .withResult(TransactionStatus.FAILED).withRpcErrors(commitResult.getErrors())
+                                                .build());
+                                    }
+                                }
+
+                                @Override
+                                public void onFailure(Throwable t) {
+                                    final NetconfDocumentedException exception =
+                                            new NetconfDocumentedException(id + ":RPC during tx commit returned an exception",
+                                                    new Exception(t), DocumentedException.ErrorType.APPLICATION,
+                                                    DocumentedException.ErrorTag.OPERATION_FAILED,
+                                                    DocumentedException.ErrorSeverity.ERROR);
+                                    txResult.setException(exception); 
+                                }
+
+                            });
+                } else {
+                    txResult.set(RpcResultBuilder.<TransactionStatus>failed()
+                            .withResult(TransactionStatus.FAILED).withRpcErrors(editResult.getErrors())
+                            .build());
+                }
+
+            }
+            @Override
+            public void onFailure(Throwable t) {
+                final NetconfDocumentedException exception =
+                        new NetconfDocumentedException(id + ":RPC during tx edit config returned an exception",
+                                new Exception(t), DocumentedException.ErrorType.APPLICATION,
+                                DocumentedException.ErrorTag.OPERATION_FAILED,
+                                DocumentedException.ErrorSeverity.ERROR);
+                txResult.setException(exception);
+            }
+
+
+        });
+       return txResult;
     }
 
     protected void cleanupOnSuccess() {
