@@ -11,17 +11,24 @@ package org.opendaylight.netconf.sal.connect.netconf.sal.tx;
 import com.google.common.base.Function;
 import com.google.common.base.Optional;
 import com.google.common.util.concurrent.CheckedFuture;
+import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.SettableFuture;
+
 import java.util.ArrayList;
 import java.util.List;
+
+import org.opendaylight.controller.config.util.xml.DocumentedException;
 import org.opendaylight.controller.md.sal.common.api.TransactionStatus;
 import org.opendaylight.controller.md.sal.common.api.data.TransactionCommitFailedException;
 import org.opendaylight.controller.md.sal.dom.api.DOMRpcResult;
+import org.opendaylight.netconf.api.NetconfDocumentedException;
 import org.opendaylight.netconf.sal.connect.netconf.util.NetconfBaseOps;
 import org.opendaylight.netconf.sal.connect.netconf.util.NetconfRpcFutureCallback;
 import org.opendaylight.netconf.sal.connect.util.RemoteDeviceId;
 import org.opendaylight.yangtools.yang.common.RpcResult;
+import org.opendaylight.yangtools.yang.common.RpcResultBuilder;
 import org.opendaylight.yangtools.yang.data.api.ModifyAction;
 import org.opendaylight.yangtools.yang.data.api.YangInstanceIdentifier;
 import org.opendaylight.yangtools.yang.data.api.schema.DataContainerChild;
@@ -93,7 +100,32 @@ public class WriteRunningTx extends AbstractWriteTx {
             resultsFutures.add(change.execute(id, netOps, rollbackSupport));
         }
         unlock();
-        return resultsToTxStatus();
+        final ListenableFuture<RpcResult<Void>> editConfigResults = resultsToTxStatus();
+        final SettableFuture<RpcResult<TransactionStatus>> txResult = SettableFuture.create();
+        Futures.addCallback(editConfigResults, new FutureCallback<RpcResult<Void>>() {
+
+            @Override
+            public void onSuccess(RpcResult<Void> editResults) { 
+                if (editResults.isSuccessful()) {
+                    txResult.set(RpcResultBuilder.success(TransactionStatus.COMMITED).build());
+                } else {
+                    txResult.set(RpcResultBuilder.<TransactionStatus>failed().withResult(TransactionStatus.FAILED)
+                            .withRpcErrors(editResults.getErrors()).build());
+                }
+            }
+
+            @Override
+            public void onFailure(Throwable t) {
+                final NetconfDocumentedException exception =
+                        new NetconfDocumentedException(id + ":RPC during tx edit config returned an exception",
+                                new Exception(t), DocumentedException.ErrorType.APPLICATION,
+                                DocumentedException.ErrorTag.OPERATION_FAILED, DocumentedException.ErrorSeverity.ERROR);
+                txResult.setException(exception);
+            }
+
+
+        });
+        return txResult;
     }
 
     @Override
