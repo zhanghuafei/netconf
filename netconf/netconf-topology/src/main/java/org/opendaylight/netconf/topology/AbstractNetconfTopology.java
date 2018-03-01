@@ -309,9 +309,15 @@ public abstract class AbstractNetconfTopology implements NetconfTopology {
             LOG.info("Concurrent rpc limit is smaller than 1, no limit will be enforced for device {}", remoteDeviceId);
         }
 
-        return new NetconfConnectorDTO(userCapabilities.isPresent()
-                ? new NetconfDeviceCommunicator(remoteDeviceId, device, userCapabilities.get(), rpcMessageLimit)
-                : new NetconfDeviceCommunicator(remoteDeviceId, device, rpcMessageLimit), salFacade);
+        NetconfDeviceCommunicator communicator = userCapabilities.isPresent() ? new NetconfDeviceCommunicator(
+                remoteDeviceId, device, userCapabilities.get(), rpcMessageLimit)
+                : new NetconfDeviceCommunicator(remoteDeviceId, device,
+                        rpcMessageLimit);
+        if (keepaliveDelay > 0) {
+            ((KeepaliveSalFacade) salFacade).setListener(communicator); 
+        }
+
+        return new NetconfConnectorDTO(communicator, salFacade);
     }
 
     protected NetconfDevice.SchemaResourcesDTO setupSchemaCacheDTO(final NodeId nodeId, final NetconfNode node) {
