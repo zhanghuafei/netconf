@@ -205,14 +205,18 @@ public class RemoteDeviceConnectorImpl implements RemoteDeviceConnector {
             LOG.info("{}: Concurrent rpc limit is smaller than 1, no limit will be enforced.", remoteDeviceId);
         }
 
-        return new NetconfConnectorDTO(
-                userCapabilities.isPresent() ? new NetconfDeviceCommunicator(remoteDeviceId, device,
-                        new UserPreferences(userCapabilities.get(),
-                                Objects.isNull(node.getYangModuleCapabilities())
-                                        ? false : node.getYangModuleCapabilities().isOverride(),
-                                Objects.isNull(node.getNonModuleCapabilities())
-                                        ? false : node.getNonModuleCapabilities().isOverride()), rpcMessageLimit)
-                        : new NetconfDeviceCommunicator(remoteDeviceId, device, rpcMessageLimit), salFacade);
+        NetconfDeviceCommunicator communicator = userCapabilities.isPresent() ? new NetconfDeviceCommunicator(remoteDeviceId, device,
+                new UserPreferences(userCapabilities.get(),
+                        Objects.isNull(node.getYangModuleCapabilities())
+                                ? false : node.getYangModuleCapabilities().isOverride(),
+                        Objects.isNull(node.getNonModuleCapabilities())
+                                ? false : node.getNonModuleCapabilities().isOverride()), rpcMessageLimit)
+                : new NetconfDeviceCommunicator(remoteDeviceId, device, rpcMessageLimit);
+        
+        if (keepaliveDelay > 0) {
+            ((KeepaliveSalFacade) salFacade).setListener(communicator); 
+        }
+        return new NetconfConnectorDTO(communicator, salFacade);
     }
 
     private Optional<NetconfSessionPreferences> getUserCapabilities(final NetconfNode node) {
