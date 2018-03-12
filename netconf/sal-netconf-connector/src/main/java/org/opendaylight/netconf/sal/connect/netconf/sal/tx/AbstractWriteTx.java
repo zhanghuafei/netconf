@@ -45,6 +45,9 @@ import org.slf4j.LoggerFactory;
 public abstract class AbstractWriteTx implements DOMDataWriteTransaction {
 
     private static final Logger LOG  = LoggerFactory.getLogger(AbstractWriteTx.class);
+    
+    // note: not thread safe
+    private volatile boolean isValidated = false;  
 
     protected final RemoteDeviceId id;
     protected final NetconfBaseOps netOps;
@@ -143,7 +146,8 @@ public abstract class AbstractWriteTx implements DOMDataWriteTransaction {
         listeners.forEach(listener -> listener.onTransactionSubmitted(this));
         checkNotFinished();
         finished = true;
-        final ListenableFuture<RpcResult<TransactionStatus>> result = performCommit();
+        final ListenableFuture<RpcResult<Void>> editConfigResults = resultsToTxStatus();  
+        final ListenableFuture<RpcResult<TransactionStatus>> result = performCommit(editConfigResults);
         Futures.addCallback(result, new FutureCallback<RpcResult<TransactionStatus>>() {
             @Override
             public void onSuccess(@Nullable final RpcResult<TransactionStatus> result) {
@@ -163,7 +167,7 @@ public abstract class AbstractWriteTx implements DOMDataWriteTransaction {
         return result;
     }
 
-    protected abstract ListenableFuture<RpcResult<TransactionStatus>> performCommit();
+    protected abstract <T> ListenableFuture<RpcResult<TransactionStatus>> performCommit(ListenableFuture<RpcResult<T>>  result); 
 
     private void checkEditable(final LogicalDatastoreType store) {
         checkNotFinished();
@@ -172,9 +176,17 @@ public abstract class AbstractWriteTx implements DOMDataWriteTransaction {
 
     protected abstract void editConfig(final YangInstanceIdentifier path, final Optional<NormalizedNode<?, ?>> data, final DataContainerChild<?, ?> editStructure, final Optional<ModifyAction> defaultOperation, final String operation);
 
+    public ListenableFuture<DOMRpcResult> validateCandidate() { 
+   
+        return netOps.validateCandidate(new NetconfRpcFutureCallback("Validate candidate", id));
+       
+    } 
+    
     protected ListenableFuture<RpcResult<Void>> resultsToTxStatus() {
         final SettableFuture<RpcResult<Void>> transformed = SettableFuture.create();
-        resultsFutures.add(netOps.validateCandidate(new NetconfRpcFutureCallback("Validate candidate", id)));
+
+        resultsFutures.add(validateCandidate());
+
         Futures.addCallback(Futures.allAsList(resultsFutures), new FutureCallback<List<DOMRpcResult>>() {
             @Override
             public void onSuccess(final List<DOMRpcResult> domRpcResults) {
@@ -204,4 +216,5 @@ public abstract class AbstractWriteTx implements DOMDataWriteTransaction {
         listeners.add(listener);
         return () -> listeners.remove(listener);
     }
+
 }

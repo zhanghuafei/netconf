@@ -147,17 +147,18 @@ public class WriteCandidateTx extends AbstractWriteTx {
     private void discardChanges() {
         netOps.discardChanges(new NetconfRpcFutureCallback("Discarding candidate", id));
     }
+    
 
     @SuppressWarnings("deprecation")
     @Override
-    public synchronized ListenableFuture<RpcResult<TransactionStatus>> performCommit() { 
-        final ListenableFuture<RpcResult<Void>> editConfigResults = resultsToTxStatus(); 
+    protected synchronized <T> ListenableFuture<RpcResult<TransactionStatus>> performCommit(ListenableFuture<RpcResult<T>> editConfigResults) { 
+
         final SettableFuture<RpcResult<TransactionStatus>> txResult = SettableFuture.create();
         
-        Futures.addCallback(editConfigResults, new FutureCallback<RpcResult<Void>>() { 
+        Futures.addCallback(editConfigResults, new FutureCallback<RpcResult<T>>() { 
             
             @Override
-            public void onSuccess(RpcResult<Void> editResult) { 
+            public void onSuccess(RpcResult<T> editResult) { 
                 if (editResult.isSuccessful()) {
                     Futures.addCallback(netOps.commit(new NetconfRpcFutureCallback("Commit", id)),
                             new FutureCallback<DOMRpcResult>() {

@@ -95,17 +95,16 @@ public class WriteRunningTx extends AbstractWriteTx {
     }
 
     @Override
-    public synchronized ListenableFuture<RpcResult<TransactionStatus>> performCommit() {
+    protected synchronized <T> ListenableFuture<RpcResult<TransactionStatus>> performCommit(ListenableFuture<RpcResult<T>> editConfigResults) {
         for (final Change change : changes) {
             resultsFutures.add(change.execute(id, netOps, rollbackSupport));
         }
         unlock();
-        final ListenableFuture<RpcResult<Void>> editConfigResults = resultsToTxStatus();
         final SettableFuture<RpcResult<TransactionStatus>> txResult = SettableFuture.create();
-        Futures.addCallback(editConfigResults, new FutureCallback<RpcResult<Void>>() {
+        Futures.addCallback(editConfigResults, new FutureCallback<RpcResult<T>>() { 
 
             @Override
-            public void onSuccess(RpcResult<Void> editResults) { 
+            public void onSuccess(RpcResult<T> editResults) { 
                 if (editResults.isSuccessful()) {
                     txResult.set(RpcResultBuilder.success(TransactionStatus.COMMITED).build());
                 } else {

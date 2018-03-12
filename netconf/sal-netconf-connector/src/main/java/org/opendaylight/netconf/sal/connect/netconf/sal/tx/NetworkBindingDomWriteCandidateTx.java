@@ -12,6 +12,7 @@ import org.opendaylight.controller.md.sal.dom.api.DOMDataBroker;
 import org.opendaylight.controller.md.sal.dom.api.DOMDataWriteTransaction;
 import org.opendaylight.controller.md.sal.dom.api.DOMMountPoint;
 import org.opendaylight.controller.md.sal.dom.api.DOMMountPointService;
+import org.opendaylight.controller.md.sal.dom.api.DOMRpcResult;
 import org.opendaylight.mdsal.binding.dom.codec.api.BindingNormalizedNodeSerializer;
 import org.opendaylight.netconf.api.NetconfDocumentedException;
 import org.opendaylight.yangtools.yang.binding.DataObject;
@@ -36,7 +37,9 @@ public class NetworkBindingDomWriteCandidateTx implements NetworkWriteTransactio
   
   private BindingNormalizedNodeSerializer codec;
   private DOMMountPointService mountService;
-  private Map<YangInstanceIdentifier, DOMDataWriteTransaction> mountPointPathToTx = Maps.newHashMap();
+  
+
+  private Map<YangInstanceIdentifier, DOMDataWriteTransaction> mountPointPathToTx = Maps.newHashMap();  // cohorts 
   
   public  NetworkBindingDomWriteCandidateTx(BindingNormalizedNodeSerializer codec, DOMMountPointService mountService) {
     this.codec = codec;
@@ -72,50 +75,81 @@ public class NetworkBindingDomWriteCandidateTx implements NetworkWriteTransactio
   }
   
   
-  private ListenableFuture<RpcResult<TransactionStatus>> performCommit() { 
-    return resultsToTxStatus();
+  private ListenableFuture<RpcResult<TransactionStatus>> performCommit() {
+     ListenableFuture<RpcResult<TransactionStatus>> voteResult = toVoteResult();
+     
+     List<ListenableFuture<RpcResult<TransactionStatus>>> txResults = Lists.newArrayList();
+     mountPointPathToTx.entrySet().stream()
+         .forEach(entry -> txResults.add(((AbstractWriteTx) entry.getValue()).performCommit(voteResult)));
+     final SettableFuture<RpcResult<TransactionStatus>> transformed = SettableFuture.create();
+      
+     Futures.addCallback(Futures.allAsList(txResults), new FutureCallback<List<RpcResult<TransactionStatus>>>() {
+         @Override
+         public void onSuccess(final List<RpcResult<TransactionStatus>> txResults) {
+           txResults.forEach(txResult -> {
+             if (!txResult.isSuccessful() && !transformed.isDone()) { 
+               RpcResult<TransactionStatus> result =
+                   RpcResultBuilder.<TransactionStatus>failed().withResult(TransactionStatus.FAILED)
+                       .withRpcErrors(txResult.getErrors()).build();
+               transformed.set(result);
+             }
+           });
+
+           if (!transformed.isDone()) {
+             transformed.set(RpcResultBuilder.success(TransactionStatus.COMMITED).build());
+           }
+         }
+
+         @Override
+         public void onFailure(final Throwable throwable) {
+           final NetconfDocumentedException exception =
+               new NetconfDocumentedException(":RPC during tx returned an exception", new Exception(throwable),
+                   DocumentedException.ErrorType.APPLICATION, DocumentedException.ErrorTag.OPERATION_FAILED,
+                   DocumentedException.ErrorSeverity.ERROR);
+           transformed.setException(exception);
+         }
+       });
+       return transformed;
+    
   }
 
 
-  private ListenableFuture<RpcResult<TransactionStatus>> resultsToTxStatus() { 
-    List<ListenableFuture<RpcResult<TransactionStatus>>> txResults = Lists.newArrayList();
-    mountPointPathToTx.entrySet().stream()
-        .forEach(entry -> txResults.add(((AbstractWriteTx) entry.getValue()).performCommit()));
-    final SettableFuture<RpcResult<TransactionStatus>> transformed = SettableFuture.create();
+  private ListenableFuture<RpcResult<TransactionStatus>> toVoteResult() { 
+      List<ListenableFuture<RpcResult<Void>>> txResults = Lists.newArrayList();
+      mountPointPathToTx.entrySet().stream()
+          .forEach(entry -> txResults.add(((AbstractWriteTx) entry.getValue()).resultsToTxStatus()));
+      final SettableFuture<RpcResult<TransactionStatus>> transformed = SettableFuture.create();
 
-    Futures.addCallback(Futures.allAsList(txResults), new FutureCallback<List<RpcResult<TransactionStatus>>>() {
-      @Override
-      public void onSuccess(final List<RpcResult<TransactionStatus>> txResults) {
-        txResults.forEach(txResult -> {
-          if (!txResult.isSuccessful()) {
-            RpcResult<TransactionStatus> result =
-                RpcResultBuilder.<TransactionStatus>failed().withResult(TransactionStatus.FAILED)
-                    .withRpcErrors(txResult.getErrors()).build();
-            transformed.set(result);
+      Futures.addCallback(Futures.allAsList(txResults), new FutureCallback<List<RpcResult<Void>>>() {
+        @Override
+        public void onSuccess(final List<RpcResult<Void>> txResults) {
+          txResults.forEach(txResult -> {
+            if (!txResult.isSuccessful() && !transformed.isDone()) {
+              RpcResult<TransactionStatus> result = 
+                  RpcResultBuilder.<TransactionStatus>failed().withResult(TransactionStatus.FAILED)
+                      .withRpcErrors(txResult.getErrors()).build();
+              transformed.set(result);
+            }
+          });
+
+          if (!transformed.isDone()) {
+            transformed.set(RpcResultBuilder.success(TransactionStatus.COMMITED).build());
           }
-        });
-
-        if (!transformed.isDone()) {
-          transformed.set(RpcResultBuilder.success(TransactionStatus.COMMITED).build());
         }
-      }
 
-      @Override
-      public void onFailure(final Throwable throwable) {
-        final NetconfDocumentedException exception =
-            new NetconfDocumentedException(":RPC during tx returned an exception", new Exception(throwable),
-                DocumentedException.ErrorType.APPLICATION, DocumentedException.ErrorTag.OPERATION_FAILED,
-                DocumentedException.ErrorSeverity.ERROR);
-        transformed.setException(exception);
-      }
-    });
-
-
-    return transformed;
-
+        @Override
+        public void onFailure(final Throwable throwable) {
+          final NetconfDocumentedException exception =
+              new NetconfDocumentedException(":RPC during tx returned an exception", new Exception(throwable),
+                  DocumentedException.ErrorType.APPLICATION, DocumentedException.ErrorTag.OPERATION_FAILED,
+                  DocumentedException.ErrorSeverity.ERROR);
+          transformed.setException(exception);
+        }
+      });
+      return transformed;
+      
   }
-  
-  
+
   
   @Override
   public CheckedFuture<Void, TransactionCommitFailedException> submit() {
@@ -126,8 +160,9 @@ public class NetworkBindingDomWriteCandidateTx implements NetworkWriteTransactio
       public void onSuccess(RpcResult<TransactionStatus> result) {
         if(result.isSuccessful()) {
           cleanupOnSuccess();
+        } else {
+          cleanup();
         }
-        cleanup();
       }
       
       @Override
