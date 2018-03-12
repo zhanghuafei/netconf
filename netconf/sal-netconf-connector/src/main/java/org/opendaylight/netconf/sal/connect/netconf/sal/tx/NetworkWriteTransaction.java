@@ -11,6 +11,12 @@ public interface NetworkWriteTransaction {
   public <T extends DataObject> void put(InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store,
       InstanceIdentifier<T> path, T data);
   
+  public <T extends DataObject> void delete (InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store,
+          InstanceIdentifier<T> path);
+  
+  public <T extends DataObject> void merge(InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store,
+          InstanceIdentifier<T> path, T data);
+  
   public CheckedFuture<Void, TransactionCommitFailedException> submit();
 
 }
