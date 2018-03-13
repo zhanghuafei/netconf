@@ -32,7 +32,7 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 @SuppressWarnings("deprecation")  
-public class NetworkBindingDomWriteCandidateTx implements NetworkWriteTransaction {
+public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTransaction {
 
     private BindingNormalizedNodeSerializer codec;
     private DOMMountPointService mountService;
@@ -40,7 +40,7 @@ public class NetworkBindingDomWriteCandidateTx implements NetworkWriteTransactio
 
     private Map<YangInstanceIdentifier, DOMDataWriteTransaction> mountPointPathToTx = Maps.newHashMap(); // cohorts
 
-    public NetworkBindingDomWriteCandidateTx(BindingNormalizedNodeSerializer codec, DOMMountPointService mountService) {
+    public BindingAcrossDeviceWriteTransaction(BindingNormalizedNodeSerializer codec, DOMMountPointService mountService) {
         this.codec = codec;
         this.mountService = mountService;
     }
