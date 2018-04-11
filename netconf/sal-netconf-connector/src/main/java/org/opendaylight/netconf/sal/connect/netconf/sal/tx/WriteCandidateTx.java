@@ -192,6 +192,7 @@ public class WriteCandidateTx extends AbstractWriteTx {
                 }
 
             }
+            
             @Override
             public void onFailure(Throwable t) {
                 final NetconfDocumentedException exception =

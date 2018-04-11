@@ -1,5 +1,6 @@
 package org.opendaylight.netconf.sal.connect.netconf.sal.tx;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -20,6 +21,8 @@ import org.opendaylight.yangtools.yang.common.RpcResult;
 import org.opendaylight.yangtools.yang.common.RpcResultBuilder;
 import org.opendaylight.yangtools.yang.data.api.YangInstanceIdentifier;
 import org.opendaylight.yangtools.yang.data.api.schema.NormalizedNode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Function;
 import com.google.common.base.Optional;
@@ -33,9 +36,11 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 @SuppressWarnings("deprecation")  
 public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTransaction {
-
+    
+    private static final Logger LOG  = LoggerFactory.getLogger(BindingAcrossDeviceWriteTransaction.class);
     private BindingNormalizedNodeSerializer codec;
     private DOMMountPointService mountService;
+    private List<InstanceIdentifier<?>> missingMountPointPaths = new ArrayList<>(); // to keep error info
 
 
     private Map<YangInstanceIdentifier, DOMDataWriteTransaction> mountPointPathToTx = Maps.newHashMap(); // cohorts
@@ -44,6 +49,10 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
         this.codec = codec;
         this.mountService = mountService;
     }
+    
+    private boolean isAnyMountPointMissing() {
+        return !missingMountPointPaths.isEmpty();
+    }
 
     private DOMDataWriteTransaction getOrCreate(InstanceIdentifier<?> mountPointPath,
             YangInstanceIdentifier yangMountPointPath) {
@@ -51,8 +60,9 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
         if (tx == null) {
             Optional<DOMMountPoint> optionalMountPoint = mountService.getMountPoint(yangMountPointPath);
             if (!optionalMountPoint.isPresent()) {
-                final SettableFuture<RpcResult<TransactionStatus>> txResult = SettableFuture.create();
-                txResult.setException(new IllegalStateException("Mount point " + mountPointPath + " not exist."));
+                LOG.error("Mount point " + mountPointPath + " not exist.");
+                missingMountPointPaths.add(mountPointPath);
+                return null;
             }
             DOMMountPoint mountPoint = optionalMountPoint.get();
             DOMDataBroker db = mountPoint.getService(DOMDataBroker.class).get(); // I think not check optional should be ok.
@@ -78,6 +88,7 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
                         RpcResult<TransactionStatus> result =
                                 RpcResultBuilder.<TransactionStatus>failed().withResult(TransactionStatus.FAILED)
                                         .withRpcErrors(txResult.getErrors()).build();
+                        LOG.error("Commit phase failed for device returned error.", new IllegalStateException()) ;
                         transformed.set(result);
                     }
                 });
@@ -93,6 +104,7 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
                         new NetconfDocumentedException(":RPC during tx returned an exception",
                                 new Exception(throwable), DocumentedException.ErrorType.APPLICATION,
                                 DocumentedException.ErrorTag.OPERATION_FAILED, DocumentedException.ErrorSeverity.ERROR);
+                LOG.error("Commit phase failed for exception", exception) ;
                 transformed.setException(exception);
             }
         });
@@ -133,11 +145,17 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
             }
         });
         return transformed;
-
     }
 
     @Override
     public CheckedFuture<Void, TransactionCommitFailedException> submit() {
+        if(isAnyMountPointMissing()) {
+            cleanup(); // discard all changes
+            SettableFuture<Void> resultFturue = SettableFuture.create();
+            resultFturue.setException(new IllegalStateException(missingMountPointPaths.size() + " mount point missing"));
+            return toCheckedFuture(resultFturue);
+        }
+        
         ListenableFuture<RpcResult<TransactionStatus>> netTxStatus = performCommit();
         Futures.addCallback(netTxStatus, new FutureCallback<RpcResult<TransactionStatus>>() {
 
@@ -155,14 +173,6 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
                 cleanup();
             }
 
-            private void cleanupOnSuccess() {
-                mountPointPathToTx.values().stream().forEach(tx -> ((WriteCandidateTx) tx).cleanupOnSuccess());
-            }
-
-            private void cleanup() {
-                mountPointPathToTx.values().stream().forEach(tx -> ((WriteCandidateTx) tx).cleanup());
-            }
-
         });
 
         final ListenableFuture<Void> commitFutureAsVoid =
@@ -170,12 +180,25 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
                     @Override
                     public Void apply(final RpcResult<TransactionStatus> input) {
                         Preconditions.checkArgument(input.isSuccessful() && input.getErrors().isEmpty(),
-                                "Submit of net transaction failed with error: %s", input.getErrors());
+                                "Submit of across-device transaction failed with error: %s", input.getErrors());
                         return null;
                     }
                 });
 
-        return Futures.makeChecked(commitFutureAsVoid, new Function<Exception, TransactionCommitFailedException>() {
+        return toCheckedFuture(commitFutureAsVoid);
+    }
+    
+    private void cleanupOnSuccess() {
+        mountPointPathToTx.values().stream().forEach(tx -> ((WriteCandidateTx) tx).cleanupOnSuccess());
+    }
+
+    private void cleanup() {
+        mountPointPathToTx.values().stream().forEach(tx -> ((WriteCandidateTx) tx).cleanup());
+    }
+
+    private CheckedFuture<Void, TransactionCommitFailedException> toCheckedFuture(
+            final ListenableFuture<Void> futureAsVoid) {  
+        return Futures.makeChecked(futureAsVoid, new Function<Exception, TransactionCommitFailedException>() {
             @Override
             public TransactionCommitFailedException apply(final Exception input) {
                 if (input.getCause() instanceof IllegalArgumentException) {
@@ -191,7 +214,11 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
     public <T extends DataObject> void put(InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store, InstanceIdentifier<T> path, T data) {
         YangInstanceIdentifier yangMountPointPath = codec.toYangInstanceIdentifier(mountPointPath);
         DOMDataWriteTransaction tx = getOrCreate(mountPointPath, yangMountPointPath);
+        if(isAnyMountPointMissing()) {
+            return;
+        }
         final Entry<YangInstanceIdentifier, NormalizedNode<?, ?>> normalized = codec.toNormalizedNode(path, data);
+
         tx.put(store, normalized.getKey(), normalized.getValue()); // may fail ?
     }
     
@@ -200,6 +227,9 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
         YangInstanceIdentifier yangMountPointPath = codec.toYangInstanceIdentifier(mountPointPath);
         YangInstanceIdentifier dataPath = codec.toYangInstanceIdentifier(path);
         DOMDataWriteTransaction tx = getOrCreate(mountPointPath, yangMountPointPath);
+        if(isAnyMountPointMissing()) {
+            return;
+        }
         tx.delete(store, dataPath); 
     }
 
@@ -209,6 +239,9 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
             T data) {
         YangInstanceIdentifier yangMountPointPath = codec.toYangInstanceIdentifier(mountPointPath);
         DOMDataWriteTransaction tx = getOrCreate(mountPointPath, yangMountPointPath);
+        if(isAnyMountPointMissing()) {
+            return;
+        }
         final Entry<YangInstanceIdentifier, NormalizedNode<?, ?>> normalized = codec.toNormalizedNode(path, data);
         tx.merge(store, normalized.getKey(), normalized.getValue()); 
     }
