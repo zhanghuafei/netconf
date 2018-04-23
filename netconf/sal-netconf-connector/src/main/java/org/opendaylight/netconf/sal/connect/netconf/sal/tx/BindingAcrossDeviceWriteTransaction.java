@@ -56,7 +56,7 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
 
     private DOMDataWriteTransaction getOrCreate(InstanceIdentifier<?> mountPointPath,
             YangInstanceIdentifier yangMountPointPath) {
-        DOMDataWriteTransaction tx = mountPointPathToTx.get(mountPointPath);
+        DOMDataWriteTransaction tx = mountPointPathToTx.get(yangMountPointPath);
         if (tx == null) {
             Optional<DOMMountPoint> optionalMountPoint = mountService.getMountPoint(yangMountPointPath);
             if (!optionalMountPoint.isPresent()) {
