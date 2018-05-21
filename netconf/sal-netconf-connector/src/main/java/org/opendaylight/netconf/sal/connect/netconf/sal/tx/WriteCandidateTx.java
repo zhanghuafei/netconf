@@ -152,9 +152,7 @@ public class WriteCandidateTx extends AbstractWriteTx {
     @SuppressWarnings("deprecation")
     @Override
     protected synchronized <T> ListenableFuture<RpcResult<TransactionStatus>> performCommit(ListenableFuture<RpcResult<T>> editConfigResults) { 
-
         final SettableFuture<RpcResult<TransactionStatus>> txResult = SettableFuture.create();
-        
         Futures.addCallback(editConfigResults, new FutureCallback<RpcResult<T>>() { 
             
             @Override

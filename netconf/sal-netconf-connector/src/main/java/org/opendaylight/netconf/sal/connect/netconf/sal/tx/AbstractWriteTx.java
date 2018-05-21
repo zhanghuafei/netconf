@@ -167,7 +167,7 @@ public abstract class AbstractWriteTx implements DOMDataWriteTransaction {
         return result;
     }
 
-    protected abstract <T> ListenableFuture<RpcResult<TransactionStatus>> performCommit(ListenableFuture<RpcResult<T>>  result); 
+    protected abstract <T> ListenableFuture<RpcResult<TransactionStatus>> performCommit(ListenableFuture<RpcResult<T>> editConfigResults); 
 
     private void checkEditable(final LogicalDatastoreType store) {
         checkNotFinished();
