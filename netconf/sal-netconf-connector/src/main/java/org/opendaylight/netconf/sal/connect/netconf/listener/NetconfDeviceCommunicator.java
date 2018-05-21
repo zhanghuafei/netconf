@@ -13,7 +13,9 @@ import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
+
 import io.netty.util.concurrent.Future;
+
 import java.util.ArrayDeque;
 import java.util.Iterator;
 import java.util.List;
@@ -22,6 +24,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+
 import org.opendaylight.controller.config.util.xml.XmlElement;
 import org.opendaylight.controller.config.util.xml.XmlUtil;
 import org.opendaylight.netconf.api.NetconfDocumentedException;
@@ -357,7 +360,8 @@ public class NetconfDeviceCommunicator implements NetconfClientSessionListener, 
         if (session == null) {
             LOG.warn("{}: Session is disconnected, failing RPC request {}",
                     id, message);
-            return Futures.immediateFuture( createSessionDownRpcResult() );
+            return Futures.immediateFailedFuture(new IllegalStateException(String.format("%s: Session is disconnected, failing RPC request %s",
+                    id, message)));
         }
 
         final Request req = new Request(new UncancellableFuture<>(true), message);

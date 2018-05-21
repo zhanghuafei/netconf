@@ -12,9 +12,12 @@ import com.google.common.collect.Collections2;
 import com.google.common.util.concurrent.CheckedFuture;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
+
 import java.util.Collection;
+
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+
 import org.opendaylight.controller.md.sal.dom.api.DOMRpcAvailabilityListener;
 import org.opendaylight.controller.md.sal.dom.api.DOMRpcException;
 import org.opendaylight.controller.md.sal.dom.api.DOMRpcIdentifier;
