@@ -63,7 +63,7 @@ public final class KeepaliveSalFacade implements RemoteDeviceHandler<NetconfSess
 
     private volatile NetconfDeviceCommunicator listener;
     private volatile ScheduledFuture<?> currentKeepalive;
-    private volatile DOMRpcService currentDeviceRpc;
+    private volatile DOMRpcService keepaliveRpc;
 
     public KeepaliveSalFacade(final RemoteDeviceId id, final RemoteDeviceHandler<NetconfSessionPreferences> salFacade,
                               final ScheduledExecutorService executor, final long keepaliveDelaySeconds, final long defaultRequestTimeoutMillis) {
@@ -110,7 +110,7 @@ public final class KeepaliveSalFacade implements RemoteDeviceHandler<NetconfSess
         if(currentKeepalive != null) {
             currentKeepalive.cancel(false);
         }
-        currentDeviceRpc = null;
+        keepaliveRpc = null;
     }
 
     private void reconnect() {
@@ -122,16 +122,16 @@ public final class KeepaliveSalFacade implements RemoteDeviceHandler<NetconfSess
 
     @Override
     public void onDeviceConnected(final SchemaContext remoteSchemaContext, final NetconfSessionPreferences netconfSessionPreferences, final DOMRpcService deviceRpc) {
-        this.currentDeviceRpc = deviceRpc;
-        final DOMRpcService deviceRpc1 = new KeepaliveDOMRpcService(deviceRpc, resetKeepaliveTask, defaultRequestTimeoutMillis, executor);
-        salFacade.onDeviceConnected(remoteSchemaContext, netconfSessionPreferences, deviceRpc1);
+        this.keepaliveRpc = new KeepaliveDOMRpcService(deviceRpc, resetKeepaliveTask, defaultRequestTimeoutMillis, executor);
+        
+        salFacade.onDeviceConnected(remoteSchemaContext, netconfSessionPreferences, keepaliveRpc); 
 
         LOG.debug("{}: Netconf session initiated, starting keepalives", id);
         scheduleKeepalive();
     }
 
     private void scheduleKeepalive() {
-        Preconditions.checkState(currentDeviceRpc != null);
+        Preconditions.checkState(keepaliveRpc != null);
         LOG.trace("{}: Scheduling next keepalive in {} {}", id, keepaliveDelaySeconds, TimeUnit.SECONDS);
         currentKeepalive = executor.schedule(new Keepalive(currentKeepalive), keepaliveDelaySeconds, TimeUnit.SECONDS);
     }
@@ -187,7 +187,7 @@ public final class KeepaliveSalFacade implements RemoteDeviceHandler<NetconfSess
                 if(previousKeepalive != null && !previousKeepalive.isDone()) {
                     onFailure(new IllegalStateException("Previous keepalive timed out"));
                 } else {
-                    Futures.addCallback(currentDeviceRpc.invokeRpc(PATH, KEEPALIVE_PAYLOAD), this);
+                    Futures.addCallback(keepaliveRpc.invokeRpc(PATH, KEEPALIVE_PAYLOAD), this);
                 }
             } catch (NullPointerException e) {
                 LOG.debug("{}: Skipping keepalive while reconnecting", id);
