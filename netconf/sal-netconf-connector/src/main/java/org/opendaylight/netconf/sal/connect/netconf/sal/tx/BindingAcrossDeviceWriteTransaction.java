@@ -1,11 +1,14 @@
 package org.opendaylight.netconf.sal.connect.netconf.sal.tx;
 
+import io.netty.util.concurrent.Future;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
 import org.opendaylight.controller.config.util.xml.DocumentedException;
+import org.opendaylight.controller.config.util.xml.DocumentedException.ErrorTag;
 import org.opendaylight.controller.md.sal.common.api.TransactionStatus;
 import org.opendaylight.controller.md.sal.common.api.data.LogicalDatastoreType;
 import org.opendaylight.controller.md.sal.common.api.data.TransactionCommitFailedException;
@@ -15,8 +18,12 @@ import org.opendaylight.controller.md.sal.dom.api.DOMMountPoint;
 import org.opendaylight.controller.md.sal.dom.api.DOMMountPointService;
 import org.opendaylight.mdsal.binding.dom.codec.api.BindingNormalizedNodeSerializer;
 import org.opendaylight.netconf.api.NetconfDocumentedException;
+import org.opendaylight.netconf.sal.connect.api.AcrossDeviceTransCommitFailedException;
+import org.opendaylight.netconf.sal.connect.api.AcrossDeviceTransPartialUnheathyException;
 import org.opendaylight.yangtools.yang.binding.DataObject;
 import org.opendaylight.yangtools.yang.binding.InstanceIdentifier;
+import org.opendaylight.yangtools.yang.common.RpcError;
+import org.opendaylight.yangtools.yang.common.RpcError.ErrorType;
 import org.opendaylight.yangtools.yang.common.RpcResult;
 import org.opendaylight.yangtools.yang.common.RpcResultBuilder;
 import org.opendaylight.yangtools.yang.data.api.YangInstanceIdentifier;
@@ -34,10 +41,11 @@ import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
-@SuppressWarnings("deprecation")  
+
+@SuppressWarnings("deprecation")
 public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTransaction {
-    
-    private static final Logger LOG  = LoggerFactory.getLogger(BindingAcrossDeviceWriteTransaction.class);
+
+    private static final Logger LOG = LoggerFactory.getLogger(BindingAcrossDeviceWriteTransaction.class);
     private BindingNormalizedNodeSerializer codec;
     private DOMMountPointService mountService;
     private List<InstanceIdentifier<?>> missingMountPointPaths = new ArrayList<>(); // to keep error info
@@ -49,7 +57,7 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
         this.codec = codec;
         this.mountService = mountService;
     }
-    
+
     private boolean isAnyMountPointMissing() {
         return !missingMountPointPaths.isEmpty();
     }
@@ -74,42 +82,74 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
 
     private ListenableFuture<RpcResult<TransactionStatus>> performCommit() {
         ListenableFuture<RpcResult<TransactionStatus>> voteResult = toVoteResult();
+        final SettableFuture<RpcResult<TransactionStatus>> actxResult = SettableFuture.create();
+        List<ListenableFuture<RpcResult<TransactionStatus>>> commitResults = Lists.newArrayList();
 
-        List<ListenableFuture<RpcResult<TransactionStatus>>> txResults = Lists.newArrayList();
-        mountPointPathToTx.entrySet().stream()
-                .forEach(entry -> txResults.add(((AbstractWriteTx) entry.getValue()).performCommit(voteResult)));
-        final SettableFuture<RpcResult<TransactionStatus>> transformed = SettableFuture.create();
+        Futures.addCallback(voteResult, new FutureCallback<RpcResult<TransactionStatus>>() {
 
-        Futures.addCallback(Futures.allAsList(txResults), new FutureCallback<List<RpcResult<TransactionStatus>>>() {
             @Override
-            public void onSuccess(final List<RpcResult<TransactionStatus>> txResults) {
-                txResults.forEach(txResult -> {
-                    if (!txResult.isSuccessful() && !transformed.isDone()) {
-                        RpcResult<TransactionStatus> result =
-                                RpcResultBuilder.<TransactionStatus>failed().withResult(TransactionStatus.FAILED)
-                                        .withRpcErrors(txResult.getErrors()).build();
-                        LOG.error("Commit phase failed for device returned error.", new IllegalStateException()) ;
-                        transformed.set(result);
-                    }
-                });
+            public void onSuccess(RpcResult<TransactionStatus> innerVoteResult) { 
+                if (innerVoteResult.isSuccessful()) {
+                    mountPointPathToTx
+                            .entrySet()
+                            .stream()
+                            .forEach(
+                                    entry -> commitResults.add(((AbstractWriteTx) entry.getValue())
+                                            .performCommit(voteResult))); 
 
-                if (!transformed.isDone()) {
-                    transformed.set(RpcResultBuilder.success(TransactionStatus.COMMITED).build());
+                    Futures.addCallback(Futures.allAsList(commitResults),
+                            new FutureCallback<List<RpcResult<TransactionStatus>>>() {
+                                @Override
+                                public void onSuccess(final List<RpcResult<TransactionStatus>> txResults) {
+                                    txResults.forEach(txResult -> { // tx partial success
+                                        if (!txResult.isSuccessful() && !actxResult.isDone()) {
+                                            RpcResult<TransactionStatus> result =
+                                                    RpcResultBuilder.<TransactionStatus>failed()
+                                                            .withResult(TransactionStatus.FAILED)
+                                                            .withRpcErrors(txResult.getErrors()).build();
+                                            String message = "Commit phase failed for device returned error."; 
+                                            Exception finalException =
+                                                    new AcrossDeviceTransPartialUnheathyException(message, txResult
+                                                            .getErrors().toArray(
+                                                                    new RpcError[txResult.getErrors().size()]));
+                                            LOG.warn("", finalException);
+                                            actxResult.setException(finalException);
+                                        }
+                                    });
+
+                                    if (!actxResult.isDone()) { // tx success
+                                        actxResult.set(RpcResultBuilder.success(TransactionStatus.COMMITED).build());
+                                    }
+                                }
+
+                                @Override
+                                public void onFailure(final Throwable throwable) { // tx partial success
+                                    String message = ":RPC during tx 'commit' returned an exception";
+                                    Exception finalException = new AcrossDeviceTransPartialUnheathyException(message, throwable);
+                                    LOG.warn("", finalException);
+                                    actxResult.setException(finalException);
+                                }
+                            });
+                } else { // tx fail
+                    String message = "Vote phase failed for device returned error.";
+                    Exception finalException = new AcrossDeviceTransCommitFailedException(message, innerVoteResult
+                            .getErrors().toArray(new RpcError[innerVoteResult.getErrors().size()]));
+                    LOG.warn("", finalException);
+                    actxResult.setException(finalException);
                 }
             }
 
             @Override
-            public void onFailure(final Throwable throwable) {
-                final NetconfDocumentedException exception =
-                        new NetconfDocumentedException(":RPC during tx returned an exception",
-                                new Exception(throwable), DocumentedException.ErrorType.APPLICATION,
-                                DocumentedException.ErrorTag.OPERATION_FAILED, DocumentedException.ErrorSeverity.ERROR);
-                LOG.error("Commit phase failed for exception", exception) ;
-                transformed.setException(exception);
+            public void onFailure(Throwable t) { // tx fail
+                String message = ":RPC during tx 'edit-config' or 'validate' returned an exception";
+                Exception finalException = new AcrossDeviceTransCommitFailedException(message, t);
+                LOG.warn("", finalException); 
+                actxResult.setException(finalException); 
             }
-        });
-        return transformed;
 
+        });
+
+        return actxResult;
     }
 
     private ListenableFuture<RpcResult<TransactionStatus>> toVoteResult() {
@@ -149,13 +189,14 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
 
     @Override
     public CheckedFuture<Void, TransactionCommitFailedException> submit() {
-        if(isAnyMountPointMissing()) {
+        if (isAnyMountPointMissing()) {
             cleanup(); // discard all changes
             SettableFuture<Void> resultFturue = SettableFuture.create();
-            resultFturue.setException(new IllegalStateException(missingMountPointPaths.size() + " mount point missing"));
+            resultFturue
+                    .setException(new IllegalStateException(missingMountPointPaths.size() + " mount point missing"));
             return toCheckedFuture(resultFturue);
         }
-        
+
         ListenableFuture<RpcResult<TransactionStatus>> netTxStatus = performCommit();
         Futures.addCallback(netTxStatus, new FutureCallback<RpcResult<TransactionStatus>>() {
 
@@ -175,19 +216,17 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
 
         });
 
-        final ListenableFuture<Void> commitFutureAsVoid =
-                Futures.transform(netTxStatus, new Function<RpcResult<TransactionStatus>, Void>() {
-                    @Override
-                    public Void apply(final RpcResult<TransactionStatus> input) {
-                        Preconditions.checkArgument(input.isSuccessful() && input.getErrors().isEmpty(),
-                                "Submit of across-device transaction failed with error: %s", input.getErrors());
-                        return null;
-                    }
-                });
-
+        final ListenableFuture<Void> commitFutureAsVoid = Futures.transform(netTxStatus, new Function<RpcResult<TransactionStatus>, Void>() {
+            @Override
+            public Void apply(final RpcResult<TransactionStatus> input) { // Transform response with error to exception 
+                Preconditions.checkArgument(input.isSuccessful() && input.getErrors().isEmpty(), "Transaction failed with error: %s", input.getErrors());
+                return null;
+            }
+        });
+        
         return toCheckedFuture(commitFutureAsVoid);
     }
-    
+
     private void cleanupOnSuccess() {
         mountPointPathToTx.values().stream().forEach(tx -> ((WriteCandidateTx) tx).cleanupOnSuccess());
     }
@@ -199,50 +238,121 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
     private CheckedFuture<Void, TransactionCommitFailedException> toCheckedFuture(
             final ListenableFuture<Void> futureAsVoid) {  
         return Futures.makeChecked(futureAsVoid, new Function<Exception, TransactionCommitFailedException>() {
+
             @Override
-            public TransactionCommitFailedException apply(final Exception input) {
-                if (input.getCause() instanceof IllegalArgumentException) {
-                    IllegalArgumentException exception = (IllegalArgumentException) input.getCause();
-                    return new TransactionCommitFailedException(exception.getMessage(), input);
-                }
-                return new TransactionCommitFailedException("Submit of transaction failed", input);
+            public TransactionCommitFailedException apply(Exception input) {
+                return new AcrossDeviceTransCommitFailedException("Some unexpected exception caught", input);
             }
+
         });
     }
 
     @Override
-    public <T extends DataObject> void put(InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store, InstanceIdentifier<T> path, T data) {
+    public <T extends DataObject> void put(InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store,
+            InstanceIdentifier<T> path, T data) {
         YangInstanceIdentifier yangMountPointPath = codec.toYangInstanceIdentifier(mountPointPath);
         DOMDataWriteTransaction tx = getOrCreate(mountPointPath, yangMountPointPath);
-        if(isAnyMountPointMissing()) {
+        if (isAnyMountPointMissing()) {
             return;
         }
         final Entry<YangInstanceIdentifier, NormalizedNode<?, ?>> normalized = codec.toNormalizedNode(path, data);
 
         tx.put(store, normalized.getKey(), normalized.getValue()); // may fail ?
     }
-    
+
     @Override
-    public <T extends DataObject> void delete(InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store, InstanceIdentifier<T> path) {
+    public <T extends DataObject> void delete(InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store,
+            InstanceIdentifier<T> path) {
         YangInstanceIdentifier yangMountPointPath = codec.toYangInstanceIdentifier(mountPointPath);
         YangInstanceIdentifier dataPath = codec.toYangInstanceIdentifier(path);
         DOMDataWriteTransaction tx = getOrCreate(mountPointPath, yangMountPointPath);
-        if(isAnyMountPointMissing()) {
+        if (isAnyMountPointMissing()) {
             return;
         }
-        tx.delete(store, dataPath); 
+        tx.delete(store, dataPath);
     }
 
 
     @Override
-    public <T extends DataObject> void merge(InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store, InstanceIdentifier<T> path,
-            T data) {
+    public <T extends DataObject> void merge(InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store,
+            InstanceIdentifier<T> path, T data) {
         YangInstanceIdentifier yangMountPointPath = codec.toYangInstanceIdentifier(mountPointPath);
         DOMDataWriteTransaction tx = getOrCreate(mountPointPath, yangMountPointPath);
-        if(isAnyMountPointMissing()) {
+        if (isAnyMountPointMissing()) {
             return;
         }
         final Entry<YangInstanceIdentifier, NormalizedNode<?, ?>> normalized = codec.toNormalizedNode(path, data);
-        tx.merge(store, normalized.getKey(), normalized.getValue()); 
+        tx.merge(store, normalized.getKey(), normalized.getValue());
+    }
+
+
+    public static void main(String[] args) {
+        System.out.println("Usage: " + BindingAcrossDeviceWriteTransaction.class.getSimpleName() + " <port>");
+        SettableFuture<Void> future1 = SettableFuture.create();
+
+        SettableFuture<Void> future2 = SettableFuture.create();
+        List<SettableFuture<Void>> futures = Lists.newArrayList();
+        futures.add(future1);
+        futures.add(future2);
+        Futures.addCallback(Futures.allAsList(futures), new FutureCallback<List<Void>>() {
+            @Override
+            public void onSuccess(List<Void> result) {
+                System.out.println("Success");
+            }
+
+            @Override
+            public void onFailure(Throwable t) {
+                System.out.println("Failed-----------------------------------");
+            }
+
+        });
+        // future1.setException(new IllegalStateException("111111111"));
+        future1.set(null);
+        future2.setException(new IllegalStateException("222222222"));
+
+        ListenableFuture<Void> future3 = Futures.transform(future1, new Function<Void, Void>() {
+            @Override
+            public Void apply(Void input) {
+                throw new IllegalStateException("hahaha");
+            }
+        });
+
+        CheckedFuture<Void, TransactionCommitFailedException> checkedFuture =
+                Futures.makeChecked(future3, new Function<Exception, TransactionCommitFailedException>() {
+                    @Override
+                    public TransactionCommitFailedException apply(final Exception input) {
+                        System.out.println("null exception");
+                        if (input.getCause() instanceof NullPointerException) {
+                            System.out.println("null exception");
+                        }
+                        return new TransactionCommitFailedException("Submit of transaction failed", input);
+                    }
+                });
+        try {
+            checkedFuture.checkedGet();
+        } catch (Exception e) {
+            System.out.println("*************************");
+            e.printStackTrace();
+        }
+
+
+        Futures.addCallback(checkedFuture, new FutureCallback<Void>() {
+
+            @Override
+            public void onSuccess(Void result) {
+                System.out.println("eeeeeeeee");
+            }
+
+            @Override
+            public void onFailure(Throwable t) {
+                System.out.println("ttttttttt");
+                t.printStackTrace();
+
+            }
+        });
+
+
+        System.out.println("End.");
+
     }
 }
