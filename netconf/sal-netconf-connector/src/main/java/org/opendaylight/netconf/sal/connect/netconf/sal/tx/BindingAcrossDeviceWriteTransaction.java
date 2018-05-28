@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.opendaylight.controller.config.util.xml.DocumentedException;
 import org.opendaylight.controller.config.util.xml.DocumentedException.ErrorTag;
@@ -23,7 +24,6 @@ import org.opendaylight.netconf.sal.connect.api.AcrossDeviceTransPartialUnheathy
 import org.opendaylight.yangtools.yang.binding.DataObject;
 import org.opendaylight.yangtools.yang.binding.InstanceIdentifier;
 import org.opendaylight.yangtools.yang.common.RpcError;
-import org.opendaylight.yangtools.yang.common.RpcError.ErrorType;
 import org.opendaylight.yangtools.yang.common.RpcResult;
 import org.opendaylight.yangtools.yang.common.RpcResultBuilder;
 import org.opendaylight.yangtools.yang.data.api.YangInstanceIdentifier;
@@ -49,6 +49,7 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
     private BindingNormalizedNodeSerializer codec;
     private DOMMountPointService mountService;
     private List<InstanceIdentifier<?>> missingMountPointPaths = new ArrayList<>(); // to keep error info
+    private AtomicBoolean isSubmitted = new AtomicBoolean(false); 
 
 
     private Map<YangInstanceIdentifier, DOMDataWriteTransaction> mountPointPathToTx = Maps.newHashMap(); // cohorts
@@ -189,6 +190,9 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
 
     @Override
     public CheckedFuture<Void, TransactionCommitFailedException> submit() {
+        if(!isSubmitted.compareAndSet(false, true)) {
+            throw new IllegalStateException("Across device transaction already submitted.");
+        }
         if (isAnyMountPointMissing()) {
             cleanup(); // discard all changes
             SettableFuture<Void> resultFturue = SettableFuture.create();
