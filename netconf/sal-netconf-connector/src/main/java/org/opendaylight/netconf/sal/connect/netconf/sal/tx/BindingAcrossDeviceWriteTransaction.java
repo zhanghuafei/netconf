@@ -9,7 +9,6 @@ import java.util.Map.Entry;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.opendaylight.controller.config.util.xml.DocumentedException;
-import org.opendaylight.controller.config.util.xml.DocumentedException.ErrorTag;
 import org.opendaylight.controller.md.sal.common.api.TransactionStatus;
 import org.opendaylight.controller.md.sal.common.api.data.LogicalDatastoreType;
 import org.opendaylight.controller.md.sal.common.api.data.TransactionCommitFailedException;
@@ -33,7 +32,6 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Function;
 import com.google.common.base.Optional;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.CheckedFuture;
@@ -81,9 +79,9 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
         return tx;
     }
 
-    private ListenableFuture<RpcResult<TransactionStatus>> performCommit() {
+    private ListenableFuture<RpcResult<Void>> performCommit() {
         ListenableFuture<RpcResult<TransactionStatus>> voteResult = toVoteResult();
-        final SettableFuture<RpcResult<TransactionStatus>> actxResult = SettableFuture.create();
+        final SettableFuture<RpcResult<Void>> actxResult = SettableFuture.create();
         List<ListenableFuture<RpcResult<TransactionStatus>>> commitResults = Lists.newArrayList();
 
         Futures.addCallback(voteResult, new FutureCallback<RpcResult<TransactionStatus>>() {
@@ -104,10 +102,6 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
                                 public void onSuccess(final List<RpcResult<TransactionStatus>> txResults) {
                                     txResults.forEach(txResult -> { // tx partial success
                                         if (!txResult.isSuccessful() && !actxResult.isDone()) {
-                                            RpcResult<TransactionStatus> result =
-                                                    RpcResultBuilder.<TransactionStatus>failed()
-                                                            .withResult(TransactionStatus.FAILED)
-                                                            .withRpcErrors(txResult.getErrors()).build();
                                             String message = "Commit phase failed for device returned error."; 
                                             Exception finalException =
                                                     new AcrossDeviceTransPartialUnheathyException(message, txResult
@@ -119,7 +113,7 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
                                     });
 
                                     if (!actxResult.isDone()) { // tx success
-                                        actxResult.set(RpcResultBuilder.success(TransactionStatus.COMMITED).build());
+                                        actxResult.set(RpcResultBuilder.<Void>success().build());
                                     }
                                 }
 
@@ -201,11 +195,11 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
             return toCheckedFuture(resultFturue);
         }
 
-        ListenableFuture<RpcResult<TransactionStatus>> netTxStatus = performCommit();
-        Futures.addCallback(netTxStatus, new FutureCallback<RpcResult<TransactionStatus>>() {
+        ListenableFuture<RpcResult<Void>> netTxStatus = performCommit();
+        Futures.addCallback(netTxStatus, new FutureCallback<RpcResult<Void>>() {
 
             @Override
-            public void onSuccess(RpcResult<TransactionStatus> result) {
+            public void onSuccess(RpcResult<Void> result) {
                 if (result.isSuccessful()) {
                     cleanupOnSuccess();
                 } else {
@@ -220,10 +214,9 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
 
         });
 
-        final ListenableFuture<Void> commitFutureAsVoid = Futures.transform(netTxStatus, new Function<RpcResult<TransactionStatus>, Void>() {
+        final ListenableFuture<Void> commitFutureAsVoid = Futures.transform(netTxStatus, new Function<RpcResult<Void>, Void>() {
             @Override
-            public Void apply(final RpcResult<TransactionStatus> input) { // Transform response with error to exception 
-                Preconditions.checkArgument(input.isSuccessful() && input.getErrors().isEmpty(), "Transaction failed with error: %s", input.getErrors());
+            public Void apply(final RpcResult<Void> input) { // No need for rpc result. 
                 return null;
             }
         });
@@ -240,14 +233,15 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
     }
 
     private CheckedFuture<Void, TransactionCommitFailedException> toCheckedFuture(
-            final ListenableFuture<Void> futureAsVoid) {  
+            final ListenableFuture<Void> futureAsVoid) {
         return Futures.makeChecked(futureAsVoid, new Function<Exception, TransactionCommitFailedException>() {
-
             @Override
             public TransactionCommitFailedException apply(Exception input) {
-                return new AcrossDeviceTransCommitFailedException("Some unexpected exception caught", input);
+                if (input.getCause() instanceof TransactionCommitFailedException) {
+                    return (TransactionCommitFailedException) input.getCause();
+                }
+                return new AcrossDeviceTransCommitFailedException("Some unexpected exception caught", input.getCause());
             }
-
         });
     }
 

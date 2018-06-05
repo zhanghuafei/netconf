@@ -185,7 +185,8 @@ public final class KeepaliveSalFacade implements RemoteDeviceHandler<NetconfSess
 
             try {
                 if(previousKeepalive != null && !previousKeepalive.isDone()) {
-                    onFailure(new IllegalStateException("Previous keepalive timed out"));
+                    LOG.warn("{}: Keepalive RPC failed. Reconnecting netconf session.", id, new IllegalStateException("Previous keepalive timed out"));
+                    reconnect();
                 } else {
                     Futures.addCallback(keepaliveRpc.invokeRpc(PATH, KEEPALIVE_PAYLOAD), this);
                 }
@@ -202,7 +203,6 @@ public final class KeepaliveSalFacade implements RemoteDeviceHandler<NetconfSess
         public void onSuccess(final DOMRpcResult result) {
             if (result != null && result.getResult() != null) {
                 LOG.debug("{}: Keepalive RPC successful with response: {}", id, result.getResult());
-                scheduleKeepalive();
             } else {
                 LOG.warn("{} Keepalive RPC returned null with response: {}. Reconnecting netconf session", id, result);
                 reconnect();
@@ -212,7 +212,6 @@ public final class KeepaliveSalFacade implements RemoteDeviceHandler<NetconfSess
         @Override
         public void onFailure(@Nonnull final Throwable t) {
             LOG.warn("{}: Keepalive RPC failed. Reconnecting netconf session.", id, t);
-            reconnect();
         }
     }
 
