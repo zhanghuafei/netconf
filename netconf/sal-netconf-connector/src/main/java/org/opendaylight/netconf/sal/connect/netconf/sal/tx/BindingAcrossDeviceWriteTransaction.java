@@ -6,8 +6,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.eclipse.jdt.annotation.Nullable;
 import org.opendaylight.controller.config.util.xml.DocumentedException;
 import org.opendaylight.controller.md.sal.common.api.TransactionStatus;
 import org.opendaylight.controller.md.sal.common.api.data.LogicalDatastoreType;
@@ -34,6 +36,7 @@ import com.google.common.base.Function;
 import com.google.common.base.Optional;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.CheckedFuture;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
@@ -46,8 +49,8 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
     private static final Logger LOG = LoggerFactory.getLogger(BindingAcrossDeviceWriteTransaction.class);
     private BindingNormalizedNodeSerializer codec;
     private DOMMountPointService mountService;
-    private List<InstanceIdentifier<?>> missingMountPointPaths = new ArrayList<>(); // to keep error info
-    private AtomicBoolean isSubmitted = new AtomicBoolean(false); 
+    private Set<InstanceIdentifier<?>> missingMountPointPaths = Sets.newHashSet(); // to keep error info
+    private AtomicBoolean isSubmitted = new AtomicBoolean(false);  
 
 
     private Map<YangInstanceIdentifier, DOMDataWriteTransaction> mountPointPathToTx = Maps.newHashMap(); // cohorts
@@ -61,13 +64,16 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
         return !missingMountPointPaths.isEmpty();
     }
 
-    private DOMDataWriteTransaction getOrCreate(InstanceIdentifier<?> mountPointPath,
-            YangInstanceIdentifier yangMountPointPath) {
+    private @Nullable DOMDataWriteTransaction getOrCreate(InstanceIdentifier<?> mountPointPath,
+            YangInstanceIdentifier yangMountPointPath) { 
         DOMDataWriteTransaction tx = mountPointPathToTx.get(yangMountPointPath);
         if (tx == null) {
             Optional<DOMMountPoint> optionalMountPoint = mountService.getMountPoint(yangMountPointPath);
             if (!optionalMountPoint.isPresent()) {
                 LOG.error("Mount point " + mountPointPath + " not exist.");
+                if(missingMountPointPaths.contains(mountPointPath)) {
+                    return null; 
+                }
                 missingMountPointPaths.add(mountPointPath);
                 return null;
             }
@@ -240,7 +246,7 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
                 if (input.getCause() instanceof TransactionCommitFailedException) {
                     return (TransactionCommitFailedException) input.getCause();
                 }
-                return new AcrossDeviceTransCommitFailedException("Some unexpected exception caught", input.getCause());
+                return new AcrossDeviceTransCommitFailedException(input.getCause().getMessage(), input.getCause());
             }
         });
     }
