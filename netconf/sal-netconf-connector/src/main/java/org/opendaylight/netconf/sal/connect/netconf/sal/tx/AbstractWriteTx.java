@@ -19,15 +19,11 @@ import com.google.common.util.concurrent.SettableFuture;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-import javax.annotation.Nullable;
-
-import org.opendaylight.controller.config.util.xml.DocumentedException;
 import org.opendaylight.controller.md.sal.common.api.TransactionStatus;
 import org.opendaylight.controller.md.sal.common.api.data.LogicalDatastoreType;
 import org.opendaylight.controller.md.sal.common.api.data.TransactionCommitFailedException;
 import org.opendaylight.controller.md.sal.dom.api.DOMDataWriteTransaction;
 import org.opendaylight.controller.md.sal.dom.api.DOMRpcResult;
-import org.opendaylight.netconf.api.NetconfDocumentedException;
 import org.opendaylight.netconf.sal.connect.netconf.util.NetconfBaseOps;
 import org.opendaylight.netconf.sal.connect.netconf.util.NetconfRpcFutureCallback;
 import org.opendaylight.netconf.sal.connect.util.RemoteDeviceId;
@@ -44,10 +40,10 @@ import org.slf4j.LoggerFactory;
 
 public abstract class AbstractWriteTx implements DOMDataWriteTransaction {
 
-    private static final Logger LOG  = LoggerFactory.getLogger(AbstractWriteTx.class);
-    
+    private static final Logger LOG = LoggerFactory.getLogger(AbstractWriteTx.class);
+
     // note: not thread safe
-    private volatile boolean isValidated = false;  
+    private volatile boolean isValidated = false;
 
     protected final RemoteDeviceId id;
     protected final NetconfBaseOps netOps;
@@ -79,7 +75,7 @@ public abstract class AbstractWriteTx implements DOMDataWriteTransaction {
 
     @Override
     public synchronized boolean cancel() {
-        if(isFinished()) {
+        if (isFinished()) {
             return false;
         }
         listeners.forEach(listener -> listener.onTransactionCancelled(this));
@@ -92,36 +88,48 @@ public abstract class AbstractWriteTx implements DOMDataWriteTransaction {
 
     protected abstract void cleanup();
 
+    public RemoteDeviceId remoteDeviceId() {
+        return id;
+    }
+
     @Override
     public Object getIdentifier() {
         return this;
     }
 
     @Override
-    public synchronized void put(final LogicalDatastoreType store, final YangInstanceIdentifier path, final NormalizedNode<?, ?> data) {
+    public synchronized void put(final LogicalDatastoreType store, final YangInstanceIdentifier path,
+        final NormalizedNode<?, ?> data) {
         checkEditable(store);
 
-        // trying to write only mixin nodes (not visible when serialized). Ignoring. Some devices cannot handle empty edit-config rpc
-        if(containsOnlyNonVisibleData(path, data)) {
+        // trying to write only mixin nodes (not visible when serialized). Ignoring. Some devices cannot handle empty
+        // edit-config rpc
+        if (containsOnlyNonVisibleData(path, data)) {
             LOG.debug("Ignoring put for {} and data {}. Resulting data structure is empty.", path, data);
             return;
         }
 
-        final DataContainerChild<?, ?> editStructure = netOps.createEditConfigStrcture(Optional.<NormalizedNode<?, ?>>fromNullable(data), Optional.of(ModifyAction.REPLACE), path);
+        final DataContainerChild<?, ?> editStructure =
+            netOps.createEditConfigStrcture(Optional.<NormalizedNode<?, ?>>fromNullable(data),
+                Optional.of(ModifyAction.REPLACE), path);
         editConfig(path, Optional.fromNullable(data), editStructure, Optional.of(ModifyAction.NONE), "put");
     }
 
     @Override
-    public synchronized void merge(final LogicalDatastoreType store, final YangInstanceIdentifier path, final NormalizedNode<?, ?> data) {
+    public synchronized void merge(final LogicalDatastoreType store, final YangInstanceIdentifier path,
+        final NormalizedNode<?, ?> data) {
         checkEditable(store);
 
-        // trying to write only mixin nodes (not visible when serialized). Ignoring. Some devices cannot handle empty edit-config rpc
+        // trying to write only mixin nodes (not visible when serialized). Ignoring. Some devices cannot handle empty
+        // edit-config rpc
         if (containsOnlyNonVisibleData(path, data)) {
             LOG.debug("Ignoring merge for {} and data {}. Resulting data structure is empty.", path, data);
             return;
         }
 
-        final DataContainerChild<?, ?> editStructure = netOps.createEditConfigStrcture(Optional.<NormalizedNode<?, ?>>fromNullable(data), Optional.<ModifyAction>absent(), path);
+        final DataContainerChild<?, ?> editStructure =
+            netOps.createEditConfigStrcture(Optional.<NormalizedNode<?, ?>>fromNullable(data),
+                Optional.<ModifyAction>absent(), path);
         editConfig(path, Optional.fromNullable(data), editStructure, Optional.<ModifyAction>absent(), "merge");
     }
 
@@ -137,8 +145,11 @@ public abstract class AbstractWriteTx implements DOMDataWriteTransaction {
     @Override
     public synchronized void delete(final LogicalDatastoreType store, final YangInstanceIdentifier path) {
         checkEditable(store);
-        final DataContainerChild<?, ?> editStructure = netOps.createEditConfigStrcture(Optional.<NormalizedNode<?, ?>>absent(), Optional.of(ModifyAction.DELETE), path);
-        editConfig(path, Optional.<NormalizedNode<?, ?>>absent(), editStructure, Optional.of(ModifyAction.NONE), "delete");
+        final DataContainerChild<?, ?> editStructure =
+            netOps.createEditConfigStrcture(Optional.<NormalizedNode<?, ?>>absent(), Optional.of(ModifyAction.DELETE),
+                path);
+        editConfig(path, Optional.<NormalizedNode<?, ?>>absent(), editStructure, Optional.of(ModifyAction.NONE),
+            "delete");
     }
 
     @Override
@@ -146,15 +157,17 @@ public abstract class AbstractWriteTx implements DOMDataWriteTransaction {
         listeners.forEach(listener -> listener.onTransactionSubmitted(this));
         checkNotFinished();
         finished = true;
-        final ListenableFuture<RpcResult<Void>> editConfigResults = resultsToTxStatus();  
+        final ListenableFuture<RpcResult<Void>> editConfigResults = resultsToTxStatus();
         final ListenableFuture<RpcResult<TransactionStatus>> result = performCommit(editConfigResults);
         Futures.addCallback(result, new FutureCallback<RpcResult<TransactionStatus>>() {
             @Override
-            public void onSuccess(@Nullable final RpcResult<TransactionStatus> result) {
+            public void onSuccess(final RpcResult<TransactionStatus> result) {
                 if (result != null && result.isSuccessful()) {
                     listeners.forEach(txListener -> txListener.onTransactionSuccessful(AbstractWriteTx.this));
                 } else {
-                    final TransactionCommitFailedException cause = new TransactionCommitFailedException("Transaction failed", result.getErrors().toArray(new RpcError[result.getErrors().size()]));
+                    final TransactionCommitFailedException cause =
+                        new TransactionCommitFailedException("Transaction failed", result.getErrors().toArray(
+                            new RpcError[result.getErrors().size()]));
                     listeners.forEach(listener -> listener.onTransactionFailed(AbstractWriteTx.this, cause));
                 }
             }
@@ -167,21 +180,25 @@ public abstract class AbstractWriteTx implements DOMDataWriteTransaction {
         return result;
     }
 
-    protected abstract <T> ListenableFuture<RpcResult<TransactionStatus>> performCommit(ListenableFuture<RpcResult<T>> editConfigResults); 
+    protected abstract <T> ListenableFuture<RpcResult<TransactionStatus>> performCommit(
+        ListenableFuture<RpcResult<T>> editConfigResults);
 
     private void checkEditable(final LogicalDatastoreType store) {
         checkNotFinished();
-        Preconditions.checkArgument(store == LogicalDatastoreType.CONFIGURATION, "Can edit only configuration data, not %s", store);
+        Preconditions.checkArgument(store == LogicalDatastoreType.CONFIGURATION,
+            "Can edit only configuration data, not %s", store);
     }
 
-    protected abstract void editConfig(final YangInstanceIdentifier path, final Optional<NormalizedNode<?, ?>> data, final DataContainerChild<?, ?> editStructure, final Optional<ModifyAction> defaultOperation, final String operation);
+    protected abstract void editConfig(final YangInstanceIdentifier path, final Optional<NormalizedNode<?, ?>> data,
+        final DataContainerChild<?, ?> editStructure, final Optional<ModifyAction> defaultOperation,
+        final String operation);
 
-    public ListenableFuture<DOMRpcResult> validateCandidate() { 
-   
+    public ListenableFuture<DOMRpcResult> validateCandidate() {
+
         return netOps.validateCandidate(new NetconfRpcFutureCallback("Validate candidate", id));
-       
-    } 
-    
+
+    }
+
     protected ListenableFuture<RpcResult<Void>> resultsToTxStatus() {
         final SettableFuture<RpcResult<Void>> transformed = SettableFuture.create();
 
@@ -193,7 +210,7 @@ public abstract class AbstractWriteTx implements DOMDataWriteTransaction {
                 domRpcResults.forEach(domRpcResult -> {
                     if (!domRpcResult.getErrors().isEmpty() && !transformed.isDone()) {
                         RpcResult<Void> result =
-                                RpcResultBuilder.<Void>failed().withRpcErrors(domRpcResult.getErrors()).build();
+                            RpcResultBuilder.<Void>failed().withRpcErrors(domRpcResult.getErrors()).build();
                         transformed.set(result);
                     }
                 });
