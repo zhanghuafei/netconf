@@ -8,7 +8,6 @@
 
 package org.opendaylight.netconf.sal.connect.netconf.sal.tx;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -256,6 +255,10 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
 
     @Override
     public CheckedFuture<Void, TransactionCommitFailedException> submit() {
+        if(mountPointPathToTx.isEmpty()) {
+            return Futures.immediateCheckedFuture(null); 
+        }
+        
         if (!isCompleted.compareAndSet(false, true)) {
             throw new IllegalStateException("Across device transaction already submitted.");
         }
