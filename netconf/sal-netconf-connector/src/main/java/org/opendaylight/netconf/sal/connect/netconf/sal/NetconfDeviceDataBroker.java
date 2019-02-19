@@ -9,8 +9,10 @@
 package org.opendaylight.netconf.sal.connect.netconf.sal;
 
 import com.google.common.base.Preconditions;
+
 import java.util.Collections;
 import java.util.Map;
+
 import org.opendaylight.controller.md.sal.common.api.data.TransactionChainListener;
 import org.opendaylight.controller.md.sal.dom.api.DOMDataBroker;
 import org.opendaylight.controller.md.sal.dom.api.DOMDataBrokerExtension;
@@ -23,8 +25,8 @@ import org.opendaylight.netconf.sal.connect.netconf.listener.NetconfSessionPrefe
 import org.opendaylight.netconf.sal.connect.netconf.sal.tx.ReadOnlyTx;
 import org.opendaylight.netconf.sal.connect.netconf.sal.tx.ReadWriteTx;
 import org.opendaylight.netconf.sal.connect.netconf.sal.tx.TxChain;
-import org.opendaylight.netconf.sal.connect.netconf.sal.tx.WriteCandidateRunningTx;
-import org.opendaylight.netconf.sal.connect.netconf.sal.tx.WriteCandidateTx;
+import org.opendaylight.netconf.sal.connect.netconf.sal.tx.UTSarcomWriteCandidateRunningTx;
+import org.opendaylight.netconf.sal.connect.netconf.sal.tx.UTStarcomWriteCandidateTx;
 import org.opendaylight.netconf.sal.connect.netconf.sal.tx.WriteRunningTx;
 import org.opendaylight.netconf.sal.connect.netconf.util.NetconfBaseOps;
 import org.opendaylight.netconf.sal.connect.util.RemoteDeviceId;
@@ -66,9 +68,11 @@ public final class NetconfDeviceDataBroker implements DOMDataBroker {
     public DOMDataWriteTransaction newWriteOnlyTransaction() {
         if (candidateSupported) {
             if (runningWritable) {
-                return new WriteCandidateRunningTx(id, netconfOps, rollbackSupport);
+                // return new WriteCandidateRunningTx(id, netconfOps, rollbackSupport);
+                return new UTSarcomWriteCandidateRunningTx(id, netconfOps, rollbackSupport);
             } else {
-                return new WriteCandidateTx(id, netconfOps, rollbackSupport);
+                // return new WriteCandidateTx(id, netconfOps, rollbackSupport);
+            	return new UTStarcomWriteCandidateTx(id, netconfOps, rollbackSupport);
             }
         } else {
             return new WriteRunningTx(id, netconfOps, rollbackSupport);
