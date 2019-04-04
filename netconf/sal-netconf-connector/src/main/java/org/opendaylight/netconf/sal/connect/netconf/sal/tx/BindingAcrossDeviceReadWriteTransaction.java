@@ -29,6 +29,7 @@ import com.google.common.util.concurrent.CheckedFuture;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.SettableFuture;
 
+@SuppressWarnings("deprecation")
 public class BindingAcrossDeviceReadWriteTransaction extends BindingAcrossDeviceWriteTransaction implements
     AcrossDeviceReadWriteTransaction {
     private static final Logger LOG = LoggerFactory.getLogger(BindingAcrossDeviceReadWriteTransaction.class);

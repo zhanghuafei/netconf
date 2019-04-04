@@ -22,7 +22,7 @@ public class AcrossDeviceTransCommitFailedException extends TransactionCommitFai
         return new RpcError[]{RpcResultBuilder.newError(ErrorType.TRANSPORT, "exception-caught", message)}; 
     } 
     
-    public AcrossDeviceTransCommitFailedException(String message, RpcError[] errors) {
+    public AcrossDeviceTransCommitFailedException(String message, RpcError... errors) {
         super(message, null, errors); 
     }   
     
