@@ -8,10 +8,6 @@
 
 package org.opendaylight.netconf.sal.connect.api;
 
-import java.util.Map;
-
-import com.google.common.collect.Maps;
-
 /**
  * Session or connection abruptly breaking during tx may lead unhealthy transaction state.
  * 
@@ -22,23 +18,8 @@ public class AcrossDeviceTransPartialUnheathyException extends AcrossDeviceTrans
 
     private static final long serialVersionUID = 6403262059003146401L;
 
-    private Map<String, String> idToErrMsgs = Maps.newHashMap();
-
     public AcrossDeviceTransPartialUnheathyException(String message, Throwable cause) {
         super(message, cause, toExceptionRpcErrors(message));
-    }
-
-    public void setDetailedErrorMessages(Map<String, String> idToErrorMessages) {
-        this.idToErrMsgs = idToErrorMessages;
-    }
-
-    public Map<String, String> getDetailedErrorMessages() {
-        return idToErrMsgs;
-    }
-
-    @Override
-    public String getMessage() {
-        return super.getMessage() + " " + idToErrMsgs;
     }
 
 }

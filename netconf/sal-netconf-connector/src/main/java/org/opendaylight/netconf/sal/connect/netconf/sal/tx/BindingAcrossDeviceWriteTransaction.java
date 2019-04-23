@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
 import org.eclipse.jdt.annotation.Nullable;
 import org.opendaylight.controller.config.util.xml.DocumentedException;
@@ -173,16 +174,21 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
     }
 
     private ListenableFuture<RpcResult<Void>> performCommit() {
-        ListenableFuture<RpcResult<TransactionStatus>> voteResult = toVoteResult();
+        ListenableFuture<VoteResult> voteResult = toVoteResult(); 
         final SettableFuture<RpcResult<Void>> actxResult = SettableFuture.create();
         TransactionResultCallBack txResultAggregator =
             new TransactionResultCallBack(mountPointPathToTx.size(), actxResult);
 
-        Futures.addCallback(voteResult, new FutureCallback<RpcResult<TransactionStatus>>() {
+        Futures.addCallback(voteResult, new FutureCallback<VoteResult>() {
 
             @Override
-            public void onSuccess(RpcResult<TransactionStatus> innerVoteResult) {
+            public void onSuccess(VoteResult voteResult) {
+            	RpcResult<TransactionStatus>  innerVoteResult = voteResult.getResult();
                 if (innerVoteResult.isSuccessful()) {
+                	// to adapt to method performCommit
+                    SettableFuture<RpcResult<TransactionStatus>> voteFuture = SettableFuture.create();
+                    voteFuture.set(innerVoteResult);
+                	
                     mountPointPathToTx
                         .entrySet()
                         .stream()
@@ -190,16 +196,23 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
                             entry -> {
                                 AbstractWriteTx tx = (AbstractWriteTx) entry.getValue();
                                 ListenableFuture<RpcResult<TransactionStatus>> commitResult =
-                                    tx.performCommit(voteResult);
+                                    tx.performCommit(voteFuture);
                                 Futures.addCallback(commitResult,
                                     txResultAggregator.new CommitResultCallBack(tx.remoteDeviceId()));
                             });
 
                 } else { // tx fail
                     String message = "Vote phase failed for device returned error.";
-                    Exception finalException =
-                        new AcrossDeviceTransCommitFailedException(message, innerVoteResult.getErrors().toArray(
-                            new RpcError[innerVoteResult.getErrors().size()]));
+                    RpcError[] rpcErros = innerVoteResult.getErrors().stream().toArray(RpcError[]::new);
+                    AcrossDeviceTransCommitFailedException finalException =
+                        new AcrossDeviceTransCommitFailedException(message, rpcErros);
+                    
+                    Map<String, String> detailedMessages = Maps.newHashMap();
+                    for(RpcError error : rpcErros) {
+                    	detailedMessages.put(voteResult.getFaiedDeviceId(), error.getMessage());
+                    }
+                    finalException.setDetailedErrorMessages(detailedMessages); 
+                    
                     LOG.warn("", finalException);
                     actxResult.setException(finalException);
                 }
@@ -212,32 +225,56 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
                 LOG.warn("", finalException);
                 actxResult.setException(finalException);
             }
-
         });
 
         return actxResult;
     }
+    
+    private class VoteResult {
+    	private RpcResult<TransactionStatus> result;
+    	private String failedDeviceId;
+		public String getFaiedDeviceId() {
+			return failedDeviceId;
+		}
+		public VoteResult setFaiedDeviceId(String remoteDeviceId) {
+			this.failedDeviceId = remoteDeviceId;
+			return this; 
+		}
+		public RpcResult<TransactionStatus> getResult() {
+			return result;
+		}
+		public VoteResult setResult(RpcResult<TransactionStatus> result) {
+			this.result = result;
+			return this;
+		}
+    }
 
-    private ListenableFuture<RpcResult<TransactionStatus>> toVoteResult() {
-        List<ListenableFuture<RpcResult<Void>>> txResults = Lists.newArrayList();
+    private ListenableFuture<VoteResult> toVoteResult() {
+    	Map<String, ListenableFuture<RpcResult<Void>>> txResultsMap = Maps.newHashMap();
         mountPointPathToTx.entrySet().stream()
-            .forEach(entry -> txResults.add(((AbstractWriteTx) entry.getValue()).resultsToTxStatus()));
-        final SettableFuture<RpcResult<TransactionStatus>> transformed = SettableFuture.create();
+            .forEach(entry -> {
+            	AbstractWriteTx tx = (AbstractWriteTx) entry.getValue();
+            	txResultsMap.put(tx.remoteDeviceId().toString(), tx.resultsToTxStatus());
+            });
+        final SettableFuture<VoteResult> transformed = SettableFuture.create();
 
-        Futures.addCallback(Futures.allAsList(txResults), new FutureCallback<List<RpcResult<Void>>>() {
+        Futures.addCallback(Futures.allAsList(txResultsMap.values()), new FutureCallback<List<RpcResult<Void>>>() {
             @Override
             public void onSuccess(final List<RpcResult<Void>> txResults) {
-                txResults.forEach(txResult -> {
-                    if (!txResult.isSuccessful() && !transformed.isDone()) {
+            	for(int i = 0; i < txResults.size(); i++) {
+            		if (!txResults.get(i).isSuccessful() && !transformed.isDone()) {
                         RpcResult<TransactionStatus> result =
                             RpcResultBuilder.<TransactionStatus>failed().withResult(TransactionStatus.FAILED)
-                                .withRpcErrors(txResult.getErrors()).build();
-                        transformed.set(result);
+                                .withRpcErrors(txResults.get(i).getErrors()).build();
+                        String remoteDeviceId = Lists.newArrayList(txResultsMap.keySet()).get(i);
+                        VoteResult voteResult = new VoteResult().setFaiedDeviceId(remoteDeviceId).setResult(result);
+                        transformed.set(voteResult);
                     }
-                });
+            	}
 
                 if (!transformed.isDone()) {
-                    transformed.set(RpcResultBuilder.success(TransactionStatus.COMMITED).build());
+                	VoteResult voteResult = new VoteResult().setResult(RpcResultBuilder.success(TransactionStatus.COMMITED).build());
+                    transformed.set(voteResult);
                 }
             }
 
