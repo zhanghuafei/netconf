@@ -14,6 +14,8 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.eclipse.jdt.annotation.NonNull;
 import org.eclipse.jdt.annotation.Nullable;
@@ -42,6 +44,7 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Function;
 import com.google.common.base.Optional;
+import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
@@ -199,11 +202,21 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
 
             @Override
             public void onFailure(Throwable t) { // tx fail
-                String message = ":RPC during tx 'edit-config' or 'validate' returned an exception";
+                String message = "Vote phase failed for 'edit-config' or 'validate' returned exception.";
+				message = atachDeviceIdIfPresent(t, message); 
                 Exception finalException = new AcrossDeviceTransCommitFailedException(message, t);
                 LOG.warn("", finalException);
                 actxResult.setException(finalException);
             }
+
+			private String atachDeviceIdIfPresent(Throwable t, String message) {
+				Pattern pattern = Pattern.compile("RemoteDevice\\{.*\\}");
+				Matcher matcher = pattern.matcher(t.getMessage());
+				if (matcher.find()) {
+					message = matcher.group(1) + ":" + message;
+				}
+				return message;
+			}
 
         }, MoreExecutors.directExecutor());
         
