@@ -165,7 +165,7 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
                 if (isSucessful) {
                     isSucessful = false;
                 }
-                failedMessages.put(id.toString(), t.getMessage());
+                failedMessages.put(id.getName(), t.getMessage());
                 handleIfFinished(t);
             }
 
@@ -204,7 +204,8 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
             public void onFailure(Throwable t) { // tx fail
                 String message = "Vote phase failed for 'edit-config' or 'validate' returned exception.";
 				message = atachDeviceIdIfPresent(t, message); 
-                Exception finalException = new AcrossDeviceTransCommitFailedException(message, t);
+				AcrossDeviceTransCommitFailedException finalException = new AcrossDeviceTransCommitFailedException(message, t);
+                finalException.setDetailedErrorMessages(toIdMessages(message));
                 LOG.warn("", finalException);
                 actxResult.setException(finalException);
             }
@@ -213,7 +214,7 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
 				Pattern pattern = Pattern.compile("RemoteDevice\\{.*\\}");
 				Matcher matcher = pattern.matcher(t.getMessage());
 				if (matcher.find()) {
-					message = matcher.group(1) + ":" + message;
+					message = matcher.group(0) + ":" + message;
 				}
 				return message;
 			}
@@ -242,7 +243,19 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
         return actxResult;
     }
 
-    private ListenableFuture<RpcResult<Void>> toVoteResult() {
+	private static Map<String, String> toIdMessages(String message) {
+		Pattern pattern = Pattern.compile("RemoteDevice\\{(.*)\\}");
+		Matcher matcher = pattern.matcher(message);
+		String id;
+		Map<String, String> idToErr = Maps.newHashMap();
+		if (matcher.find()) {
+			id = matcher.group(1);
+			idToErr.put(id, message);
+		}
+		return idToErr;
+	}
+
+	private ListenableFuture<RpcResult<Void>> toVoteResult() {
         List<ListenableFuture<RpcResult<Void>>> txResults = Lists.newArrayList();
         mountPointPathToTx.entrySet().stream()
             .forEach(entry -> txResults.add(((UTStarcomWriteCandidateTx) entry.getValue()).prepare()));
@@ -366,6 +379,10 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
 
 
     public static void main(String[] args) {
+    	System.out.println(toIdMessages("RemoteDevice{xxxxx}"));
+    	
+    	
+    	
         System.out.println("Usage: " + BindingAcrossDeviceWriteTransaction.class.getSimpleName() + " <port>");
 
         SettableFuture<Void> future1 = SettableFuture.create();

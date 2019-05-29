@@ -163,6 +163,10 @@ public class BindingAcrossDeviceWriteTransactionTest {
     @Test(
             expected = AcrossDeviceTransCommitFailedException.class)
 	public void testSubmit() throws TransactionCommitFailedException {
+    	Map<String, String> testMap = Maps.newHashMap();
+    	testMap.put("1", "test");
+    	testMap.put("2", "test2");
+    	
 		InstanceIdentifier<NetworkTopology> dataII = InstanceIdentifier.create(NetworkTopology.class);
 		
 		tx.put(ii1, LogicalDatastoreType.CONFIGURATION, dataII, new NetworkTopologyBuilder().build());
