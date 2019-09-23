@@ -282,18 +282,20 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
     
     public FluentFuture<? extends @NonNull CommitInfo> commit() {
         SettableFuture<CommitInfo> resultFuture = SettableFuture.create() ;
+        
+        if (isAnyMountPointMissing()) {
+            cleanup(); // discard all changes
+            resultFuture
+                .setException(new IllegalStateException(missingMountPointPaths.size() + " mount point missing"));
+            return FluentFuture.from(resultFuture);
+        }
+        
         if(mountPointPathToTx.isEmpty()) {
         	return CommitInfo.emptyFluentFuture();
         }
         
         if (!isCompleted.compareAndSet(false, true)) {
             throw new IllegalStateException("Across device transaction already submitted.");
-        }
-        if (isAnyMountPointMissing()) {
-            cleanup(); // discard all changes
-            resultFuture
-                .setException(new IllegalStateException(missingMountPointPaths.size() + " mount point missing"));
-            return FluentFuture.from(resultFuture);
         }
 
         ListenableFuture<RpcResult<Void>> acTxResult = performCommit(); 
