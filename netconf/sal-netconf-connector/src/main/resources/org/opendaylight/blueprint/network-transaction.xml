@@ -8,6 +8,8 @@
 
 	<reference id="mappingCodec"
 		interface="org.opendaylight.mdsal.binding.dom.codec.api.BindingNormalizedNodeSerializer" />
+	
+
 
 	<bean id="adDataBroker"
 		class="org.opendaylight.netconf.sal.connect.netconf.sal.AcrossDeviceDataBrokerImpl">
@@ -15,8 +17,17 @@
 		<argument ref="mappingCodec" />
 	</bean>
 
+	<reference id="schemaService"
+		interface="org.opendaylight.mdsal.dom.api.DOMSchemaService" />
+		
+	<bean id="gSchemaContext"
+		class="org.opendaylight.netconf.sal.connect.netconf.util.GlobalSchemaContext">
+		<argument ref="schemaService" />
+	</bean>
+
 	<service ref="adDataBroker"
 		interface="org.opendaylight.netconf.sal.connect.netconf.sal.AcrossDeviceDataBroker"
 		odl:type="default" />
+		
 
 </blueprint>

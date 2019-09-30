@@ -33,7 +33,13 @@ import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
+
+import java.net.URISyntaxException;
 import java.util.Locale;
+
+import javax.xml.stream.XMLStreamException;
+import javax.xml.transform.dom.DOMSource;
+
 import org.opendaylight.controller.md.sal.dom.api.DOMRpcResult;
 import org.opendaylight.controller.md.sal.dom.api.DOMRpcService;
 import org.opendaylight.netconf.sal.connect.netconf.sal.KeepaliveSalFacade.KeepaliveDOMRpcService;
@@ -62,16 +68,18 @@ public final class NetconfBaseOps {
     private final DOMRpcService rpc;
     private final SchemaContext schemaContext;
     private final RpcStructureTransformer transformer;
+    private final UnknownNodeFilter unknownNodeFilter;
 
     public NetconfBaseOps(final DOMRpcService rpc, final SchemaContext schemaContext) {
         this.rpc = rpc;
         this.schemaContext = schemaContext;
+        unknownNodeFilter = new UnknownNodeFilter(schemaContext);
 
         if (rpc instanceof KeepaliveDOMRpcService
                 && ((KeepaliveDOMRpcService) rpc).getDeviceRpc() instanceof SchemalessNetconfDeviceRpc) {
             this.transformer = new SchemalessRpcStructureTransformer();
         } else {
-            this.transformer = new NetconfRpcStructureTransformer(schemaContext);
+            this.transformer = new NetconfRpcStructureTransformer(schemaContext, GlobalSchemaContext.shcemaContext()); 
         }
     }
 
@@ -287,11 +295,34 @@ public final class NetconfBaseOps {
         return future;
     }
 
-    public DataContainerChild<?, ?> createEditConfigStrcture(final Optional<NormalizedNode<?, ?>> lastChild,
-                                                             final Optional<ModifyAction> operation,
-                                                             final YangInstanceIdentifier dataPath) {
-        final AnyXmlNode configContent = transformer.createEditConfigStructure(lastChild, dataPath, operation);
-        return Builders.choiceBuilder().withNodeIdentifier(toId(EditContent.QNAME)).withChild(configContent).build();
+    /**
+     * NOTE: 因其他模型不存在版本适配问题，仅过滤UT的结点,同时避免了复杂情况的过滤处理，如augment
+     */
+	public DataContainerChild<?, ?> createEditConfigStrcture(
+			final Optional<NormalizedNode<?, ?>> lastChild,
+			final Optional<ModifyAction> operation,
+			final YangInstanceIdentifier dataPath) {
+		AnyXmlNode configContent = transformer.createEditConfigStructure(
+				lastChild, dataPath, operation);
+		if(dataPath.toString().contains("utstar")) {
+			configContent =  filterUnknownNode(configContent);
+		}
+
+		return Builders.choiceBuilder()
+				.withNodeIdentifier(toId(EditContent.QNAME))
+				.withChild(configContent).build();
+	}
+
+    /**
+     * NOTE: 因其他模型不存在版本适配问题，可以考虑是否仅过滤UT的结点
+     */
+    private AnyXmlNode filterUnknownNode(AnyXmlNode anyXmlNode) {
+    	try {
+			DOMSource source = unknownNodeFilter.from(anyXmlNode.getValue());
+			return Builders.anyXmlBuilder().withNodeIdentifier(toId(NetconfMessageTransformUtil.NETCONF_CONFIG_QNAME)).withValue(source).build();
+		} catch (XMLStreamException | URISyntaxException e) {
+			throw new IllegalStateException(e); 
+		}
     }
 
     private static ContainerNode getEditConfigContent(

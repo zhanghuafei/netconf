@@ -30,6 +30,7 @@ import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.transform.dom.DOMResult;
 import javax.xml.transform.dom.DOMSource;
+
 import org.opendaylight.controller.md.sal.dom.api.DOMEvent;
 import org.opendaylight.controller.md.sal.dom.api.DOMNotification;
 import org.opendaylight.controller.md.sal.dom.api.DOMRpcResult;
@@ -41,6 +42,7 @@ import org.opendaylight.netconf.api.NetconfMessage;
 import org.opendaylight.netconf.api.xml.MissingNameSpaceException;
 import org.opendaylight.netconf.api.xml.XmlElement;
 import org.opendaylight.netconf.sal.connect.api.MessageTransformer;
+import org.opendaylight.netconf.sal.connect.netconf.util.GlobalSchemaContext;
 import org.opendaylight.netconf.sal.connect.netconf.util.NetconfMessageTransformUtil;
 import org.opendaylight.netconf.sal.connect.util.MessageCounter;
 import org.opendaylight.yangtools.yang.common.QName;
@@ -70,6 +72,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 
 public class NetconfMessageTransformer implements MessageTransformer<NetconfMessage> {
@@ -77,6 +81,7 @@ public class NetconfMessageTransformer implements MessageTransformer<NetconfMess
     private static final Logger LOG = LoggerFactory.getLogger(NetconfMessageTransformer.class);
 
     private final SchemaContext schemaContext;
+    private final SchemaContext gctx = GlobalSchemaContext.shcemaContext();
     private final BaseSchema baseSchema;
     private final MessageCounter counter;
     private final Map<QName, RpcDefinition> mappedRpcs;
@@ -151,7 +156,7 @@ public class NetconfMessageTransformer implements MessageTransformer<NetconfMess
         try {
             final NormalizedNodeResult resultHolder = new NormalizedNodeResult();
             final NormalizedNodeStreamWriter writer = ImmutableNormalizedNodeStreamWriter.from(resultHolder);
-            final XmlParserStream xmlParser = XmlParserStream.create(writer, schemaContext,
+            final XmlParserStream xmlParser = XmlParserStream.create(writer, gctx,
                     notificationAsContainerSchemaNode, strictParsing);
             xmlParser.traverse(new DOMSource(element));
             content = (ContainerNode) resultHolder.getResult();
@@ -267,14 +272,19 @@ public class NetconfMessageTransformer implements MessageTransformer<NetconfMess
         final QName rpcQName = rpc.getLastComponent();
         if (NetconfMessageTransformUtil.isDataRetrievalOperation(rpcQName)) {
             final Element xmlData = NetconfMessageTransformUtil.getDataSubtree(message.getDocument());
+
+            SchemaContext tempContext = schemaContext;
+            if( isUTResult(xmlData)) {
+                tempContext = gctx;
+            }
             final ContainerSchemaNode schemaForDataRead =
-                    NetconfMessageTransformUtil.createSchemaForDataRead(schemaContext);
+                    NetconfMessageTransformUtil.createSchemaForDataRead(tempContext);
             final ContainerNode dataNode;
 
             try {
                 final NormalizedNodeResult resultHolder = new NormalizedNodeResult();
                 final NormalizedNodeStreamWriter writer = ImmutableNormalizedNodeStreamWriter.from(resultHolder);
-                final XmlParserStream xmlParser = XmlParserStream.create(writer, schemaContext, schemaForDataRead,
+                final XmlParserStream xmlParser = XmlParserStream.create(writer, tempContext, schemaForDataRead,
                         strictParsing);
                 xmlParser.traverse(new DOMSource(xmlData));
                 dataNode = (ContainerNode) resultHolder.getResult();
@@ -307,6 +317,30 @@ public class NetconfMessageTransformer implements MessageTransformer<NetconfMess
             normalizedNode = parseResult(message, rpcDefinition);
         }
         return new DefaultDOMRpcResult(normalizedNode);
+    }
+
+    private boolean isUTResult(Element xmlData) {
+        NodeList list = xmlData.getElementsByTagName("data");
+        if (list.getLength() == 0) {
+            return false;
+        }
+        Node node = list.item(0);
+        if (node == null) {
+            return false;
+        }
+        Node child = node.getFirstChild();
+        if (child == null) {
+            return false;
+        }
+
+        String namespace = child.getNamespaceURI();
+        if(namespace == null) {
+            return false;
+        }
+        if (namespace.contains("utstar")) {
+            return true;
+        }
+        return false;
     }
 
     @Override
