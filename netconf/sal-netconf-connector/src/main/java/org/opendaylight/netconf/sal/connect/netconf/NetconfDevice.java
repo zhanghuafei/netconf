@@ -471,15 +471,18 @@ public class NetconfDevice
 
         @Override
         public void run() {
+            try {
+                final Collection<SourceIdentifier> requiredSources = deviceSources.getRequiredSources();
+                final Collection<SourceIdentifier> missingSources = filterMissingSources(requiredSources);
 
-            final Collection<SourceIdentifier> requiredSources = deviceSources.getRequiredSources();
-            final Collection<SourceIdentifier> missingSources = filterMissingSources(requiredSources);
+                capabilities.addUnresolvedCapabilities(getQNameFromSourceIdentifiers(missingSources),
+                        UnavailableCapability.FailureReason.MissingSource);
 
-            capabilities.addUnresolvedCapabilities(getQNameFromSourceIdentifiers(missingSources),
-                    UnavailableCapability.FailureReason.MissingSource);
-
-            requiredSources.removeAll(missingSources);
-            setUpSchema(requiredSources);
+                requiredSources.removeAll(missingSources);
+                setUpSchema(requiredSources);
+            } catch (Exception e) {
+                LOG.error("{}: Schema setup error", id, e);
+            }
         }
 
         private Collection<SourceIdentifier> filterMissingSources(final Collection<SourceIdentifier> requiredSources) {
