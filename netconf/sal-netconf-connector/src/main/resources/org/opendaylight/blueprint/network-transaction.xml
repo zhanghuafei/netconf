@@ -6,6 +6,9 @@
 	<reference id="domMountPointService"
 		interface="org.opendaylight.controller.md.sal.dom.api.DOMMountPointService" />
 
+	<reference id="domMountPointService2"
+			   interface="org.opendaylight.mdsal.dom.api.DOMMountPointService" />
+
 	<reference id="mappingCodec"
 		interface="org.opendaylight.mdsal.binding.dom.codec.api.BindingNormalizedNodeSerializer" />
 	
@@ -28,6 +31,15 @@
 	<service ref="adDataBroker"
 		interface="org.opendaylight.netconf.sal.connect.netconf.sal.AcrossDeviceDataBroker"
 		odl:type="default" />
-		
+
+	<bean id="pagingImpl"
+		  class="org.opendaylight.netconf.sal.connect.netconf.sal.NetconfPagingServiceImpl">
+		<argument ref="mappingCodec" />
+		<argument ref="domMountPointService2" />
+	</bean>
+
+	<service ref="pagingImpl"
+			 interface="org.opendaylight.netconf.sal.connect.netconf.sal.NetconfPagingService"
+			 odl:type="default" />
 
 </blueprint>
