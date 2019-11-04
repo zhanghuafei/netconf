@@ -105,6 +105,11 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
         return tx;
     }
 
+    @Override
+    public void close() {
+        cancel();
+    }
+
     /**
      * Not sure if need thread safe.
      * 

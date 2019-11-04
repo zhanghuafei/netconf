@@ -24,7 +24,7 @@ import com.google.common.util.concurrent.FluentFuture;
 import com.google.common.util.concurrent.MoreExecutors;
 
 @SuppressWarnings("deprecation")
-public interface AcrossDeviceWriteTransaction {
+public interface AcrossDeviceWriteTransaction extends AutoCloseable {
     public <T extends DataObject> void put(InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store,
         InstanceIdentifier<T> path, T data);
 
