@@ -81,4 +81,6 @@
 
     <odl:rpc-implementation ref="netconfKeystoreProvider"/>
 
+    <odl:rpc-implementation ref="netconfTopology"/>
+
 </blueprint>
