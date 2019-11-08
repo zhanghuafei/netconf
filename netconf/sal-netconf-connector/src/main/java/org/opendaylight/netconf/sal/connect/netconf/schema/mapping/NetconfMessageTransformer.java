@@ -320,24 +320,10 @@ public class NetconfMessageTransformer implements MessageTransformer<NetconfMess
     }
 
     private boolean isUTResult(Element xmlData) {
-        NodeList list = xmlData.getElementsByTagName("data");
-        if (list.getLength() == 0) {
+        if(xmlData.getFirstChild() == null || xmlData.getFirstChild().getNamespaceURI() == null) {
             return false;
         }
-        Node node = list.item(0);
-        if (node == null) {
-            return false;
-        }
-        Node child = node.getFirstChild();
-        if (child == null) {
-            return false;
-        }
-
-        String namespace = child.getNamespaceURI();
-        if(namespace == null) {
-            return false;
-        }
-        if (namespace.contains("utstar")) {
+        if(xmlData.getFirstChild().getNamespaceURI().contains("utstar")) {
             return true;
         }
         return false;
