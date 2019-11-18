@@ -52,7 +52,7 @@ class NetconfRpcStructureTransformer implements RpcStructureTransformer {
 
     private boolean isFromBinding() {
         StackTraceElement[] stackElements = new Throwable().getStackTrace();
-        return Arrays.stream(stackElements).anyMatch(e -> e.getClassName().contains("BindingDOM"));
+        return Arrays.stream(stackElements).anyMatch(e -> e.getClassName().contains("BindingDOM") || e.getClassName().contains("BindingAcross"));
     }
 
     @Override
