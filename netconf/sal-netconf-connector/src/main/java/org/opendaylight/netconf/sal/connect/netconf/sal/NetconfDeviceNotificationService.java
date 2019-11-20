@@ -35,8 +35,8 @@ public class NetconfDeviceNotificationService implements DOMNotificationService 
             try {
                 domNotificationListener.onNotification(notification);
             } catch (final Exception e) {
-                LOG.warn("Listener {} threw an uncaught exception during processing notification {}",
-                        domNotificationListener, notification, e);
+                String message = String.format("Listener %s threw an uncaught exception during processing notification %s", domNotificationListener, notification);
+                LOG.warn(message, e);
             }
         }
     }
