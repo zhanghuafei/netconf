@@ -10,16 +10,14 @@ package org.opendaylight.netconf.sal.connect.netconf.sal;
 
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Strings;
 import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.FluentFuture;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
 import org.opendaylight.mdsal.binding.dom.codec.api.BindingNormalizedNodeSerializer;
-import org.opendaylight.mdsal.dom.api.DOMMountPoint;
-import org.opendaylight.mdsal.dom.api.DOMMountPointService;
-import org.opendaylight.mdsal.dom.api.DOMRpcResult;
-import org.opendaylight.mdsal.dom.api.DOMRpcService;
+import org.opendaylight.mdsal.dom.api.*;
 import org.opendaylight.netconf.api.xml.XmlUtil;
 import org.opendaylight.netconf.sal.connect.netconf.util.NetconfBaseOps;
 import org.opendaylight.netconf.sal.connect.netconf.util.NetconfMessageTransformUtil;
@@ -36,11 +34,13 @@ import org.opendaylight.yangtools.yang.model.api.SchemaPath;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 
+import javax.annotation.Nullable;
 import javax.xml.transform.dom.DOMSource;
 import java.lang.reflect.Field;
-import java.util.Collections;
 import java.util.Map;
 
+import static org.opendaylight.netconf.sal.connect.netconf.sal.ExtCmdInputFactory.EXT_CMD_RPC_QNAME;
+import static org.opendaylight.netconf.sal.connect.netconf.sal.ExtCmdInputFactory.UTSTARCOM_EXT;
 import static org.opendaylight.netconf.sal.connect.netconf.util.NetconfMessageTransformUtil.*;
 
 /**
@@ -52,8 +52,10 @@ public class NetconfPagingServiceImpl implements NetconfPagingService {
 
     private DOMMountPointService domMountService;
     final private BindingNormalizedNodeSerializer codec;
+    private	static DOMSchemaService domService;
 
     private static final String DEFAULT_TOPOLOGY_NAME = "topology-netconf";
+    private static final String  CONDITION_REGEX = "\\w+[>,<,=]{1}'.*'";
     private static final YangInstanceIdentifier DEFAULT_TOPOLOGY_NODE =
             YangInstanceIdentifier.builder().node(NetworkTopology.QNAME).node(Topology.QNAME)
                     .nodeWithKey(Topology.QNAME, QName.create(Topology.QNAME, "topology-id"), DEFAULT_TOPOLOGY_NAME)
@@ -62,6 +64,8 @@ public class NetconfPagingServiceImpl implements NetconfPagingService {
     private static final String XPATH = "xpath";
     private static final QName NETCONF_SELECT_QNAME = QName.create(NETCONF_QNAME, "select").intern();
     private static final String NAMESPACE_PREFIX = "t";
+
+
 
     public NetconfPagingServiceImpl(BindingNormalizedNodeSerializer codec, DOMMountPointService domMountService) {
         this.codec = codec;
@@ -73,10 +77,44 @@ public class NetconfPagingServiceImpl implements NetconfPagingService {
                 .nodeWithKey(Node.QNAME, QName.create(Node.QNAME, "node-id"), nodeId).build();
     }
 
+    public ListenableFuture<Integer> queryCount(String nodeId, String tableName, String type) {
+        YangInstanceIdentifier nodeII = toYangNodeII(nodeId);
+        Optional<DOMMountPoint> mountPointOpt = domMountService.getMountPoint(nodeII);
+        if (!mountPointOpt.isPresent()) {
+            SettableFuture<Integer> future = SettableFuture.create();
+            future.setException(new IllegalStateException("Specified mount point " + nodeId + " not exist"));
+            return future;
+        }
+        DOMRpcService rpcService = mountPointOpt.get().getService(DOMRpcService.class).get();
+        SchemaPath rpcType = SchemaPath.create(true, EXT_CMD_RPC_QNAME);
+        AnyXmlNode extCmdInput = ExtCmdInputFactory.createExtCmdInput(tableName, type);
+        FluentFuture<DOMRpcResult> resultFuture = rpcService.invokeRpc(rpcType, NetconfMessageTransformUtil.wrap(EXT_CMD_RPC_QNAME, extCmdInput));
+        return resultFuture.transform(domRpcResult -> {
+            Preconditions.checkArgument(domRpcResult.getErrors().isEmpty(), "%s: Unable to query count of %s, errors: %s",
+                    nodeId, tableName, domRpcResult.getErrors());
+            final DataContainerChild<? extends YangInstanceIdentifier.PathArgument, ?> reply =
+                    ((ContainerNode) domRpcResult.getResult())
+                            .getChild(NetconfMessageTransformUtil.toId(QName.create(UTSTARCOM_EXT, "reply").intern())).get();
+
+            AnyXmlNode replyValue = (AnyXmlNode) reply.getValue();
+            DOMSource domSource = replyValue.getValue();
+            Element domReply = (Element) domSource.getNode();
+            String count = domReply.getFirstChild().getTextContent();
+            if(!Strings.isNullOrEmpty(count)) {
+                return Integer.parseInt(count);
+            }
+            return -1;
+        }, MoreExecutors.directExecutor());
+    }
+
     public <T extends DataObject> ListenableFuture<Optional<T>> find(String nodeId, final Class<T> topContainer,
-                                                                     int start, int end) {
+                                                                     @Nullable Integer base, @Nullable Integer num, @Nullable String... expressions) {
+        Preconditions.checkArgument((base == null || base >= 0) && (num == null || num > 0), "limit not illegal: base = %s, num = %s", base, num);
+        for(String exp : expressions) {
+            Preconditions.checkArgument(exp.matches(CONDITION_REGEX), "%s: format not correct", exp);
+        }
+
         try {
-            Preconditions.checkArgument(start > 0 && end > 0 && start < end);
             YangInstanceIdentifier yangII = toTableYangII(topContainer);
             YangInstanceIdentifier nodeII = toYangNodeII(nodeId);
             Optional<DOMMountPoint> mountPointOpt = domMountService.getMountPoint(nodeII);
@@ -89,7 +127,7 @@ public class NetconfPagingServiceImpl implements NetconfPagingService {
             DOMRpcService rpcService = mountPointOpt.get().getService(DOMRpcService.class).get();
             SchemaPath type = SchemaPath.create(true, NETCONF_GET_CONFIG_QNAME);
             final NormalizedNodeAttrBuilder<YangInstanceIdentifier.NodeIdentifier, DOMSource, AnyXmlNode> anyXmlBuilder =
-                    toFitlerStructure(topContainer, start, end);
+                    toFitlerStructure(topContainer, base, num, expressions);
             DataContainerChild<?, ?> invokeInput = NetconfMessageTransformUtil.wrap(NETCONF_GET_CONFIG_QNAME,
                     NetconfBaseOps.getSourceNode(NETCONF_RUNNING_QNAME), anyXmlBuilder.build());
 
@@ -124,7 +162,7 @@ public class NetconfPagingServiceImpl implements NetconfPagingService {
     }
 
     private <T extends DataObject> NormalizedNodeAttrBuilder<YangInstanceIdentifier.NodeIdentifier, DOMSource, AnyXmlNode> toFitlerStructure(
-            Class<T> topContainer, int start, int end) throws IllegalAccessException, NoSuchFieldException {
+            Class<T> topContainer, Integer base, Integer num, String... expressions) throws IllegalAccessException, NoSuchFieldException {
         final NormalizedNodeAttrBuilder<YangInstanceIdentifier.NodeIdentifier, DOMSource, AnyXmlNode> anyXmlBuilder =
                 Builders.anyXmlBuilder().withNodeIdentifier(new YangInstanceIdentifier.NodeIdentifier(
                         QName.create(NETCONF_QNAME, NETCONF_FILTER_QNAME.getLocalName()).intern()));
@@ -135,7 +173,7 @@ public class NetconfPagingServiceImpl implements NetconfPagingService {
         final Element element =
                 doc.createElementNS(NETCONF_FILTER_QNAME.getNamespace().toString(), NETCONF_FILTER_QNAME.getLocalName());
         element.setAttribute(NETCONF_TYPE_QNAME.getLocalName(), XPATH);
-        element.setAttribute(NETCONF_SELECT_QNAME.getLocalName(), toXpathExp(topContainer.getSimpleName(), start, end));
+        element.setAttribute(NETCONF_SELECT_QNAME.getLocalName(), toXpathExp(topContainer.getSimpleName(), base, num, expressions));
 
         String namespace = extractNamespace(topContainer);
         element.setAttribute(XmlUtil.XMLNS_ATTRIBUTE_KEY + ":" + NAMESPACE_PREFIX, namespace);
@@ -153,10 +191,30 @@ public class NetconfPagingServiceImpl implements NetconfPagingService {
     /**
      * Example: L3VPNStaticIpv4RouteCfgs:/t:L3VPNStaticIpv4RouteCfg[/t:id >='0'][/t:id <='200']
      */
-    private String toXpathExp(String topContainerName, int start, int end) {
+    private String toXpathExp(String topContainerName, Integer base, Integer num, String... expressions) {
+
         String prefixSlash = "/" + NAMESPACE_PREFIX + ":";
         String listName = topContainerName.substring(0, topContainerName.length() - 1);
-        return prefixSlash + topContainerName + prefixSlash + listName + "[" + prefixSlash + "id >=" + "'" + start + "'"
-                + "]" + "[" + prefixSlash + "id <=" + "'" + end + "'" + "]";
+        String basePath = prefixSlash + topContainerName + prefixSlash + listName;
+
+        StringBuilder stringBuilder = new StringBuilder(basePath);
+        for(String expression : expressions) {
+            String fexp = String.format("[%s]", expressions);
+            stringBuilder.append(fexp);
+        }
+
+        String limit = toLimit(base, num);
+        if(limit != null) {
+            stringBuilder.append(limit);
+        }
+        return stringBuilder.toString();
+    }
+
+    private String toLimit(Integer base, Integer num) {
+        if(base ==  null || num == null) {
+            return null;
+        }
+        String limit = String.format("[LIMIT()-%s+%s]", base, num);
+        return limit;
     }
 }
