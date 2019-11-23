@@ -101,6 +101,11 @@ public class SchemalessMessageTransformer implements MessageTransformer<NetconfM
         return new DefaultDOMRpcResult(result);
     }
 
+    @Override
+    public DOMRpcResult toRpcResult(NetconfMessage message, SchemaPath rpc, StackTraceElement[] trace) {
+        throw new UnsupportedOperationException();
+    }
+
     private void wrapPayload(final Document doc) {
         final Element payload = doc.getDocumentElement();
         doc.removeChild(payload);
