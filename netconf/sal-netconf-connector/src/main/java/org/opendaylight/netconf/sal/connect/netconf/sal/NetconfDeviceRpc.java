@@ -57,10 +57,13 @@ public final class NetconfDeviceRpc implements DOMRpcService {
         final ListenableFuture<RpcResult<NetconfMessage>> delegateFutureWithPureResult =
                 communicator.sendRequest(message, type.getLastComponent());
 
+        // 用于识别Restconf调用栈
+        StackTraceElement[] trace = new Throwable().getStackTrace();
+
         final ListenableFuture<DOMRpcResult> transformed =
             Futures.transform(delegateFutureWithPureResult, input1 -> {
                 if (input1.isSuccessful()) {
-                    return transformer.toRpcResult(input1.getResult(), type);
+                    return transformer.toRpcResult(input1.getResult(), type, trace);
                 } else {
                     return new DefaultDOMRpcResult(input1.getErrors());
                 }

@@ -113,6 +113,11 @@ public class BaseRpcSchemalessTransformer implements MessageTransformer<NetconfM
         return new DefaultDOMRpcResult(normalizedNode);
     }
 
+    @Override
+    public DOMRpcResult toRpcResult(NetconfMessage message, SchemaPath rpc, StackTraceElement[] trace) {
+        throw new UnsupportedOperationException();
+    }
+
     // FIXME this should go to some util class
     static boolean isOkPresent(final Document doc) {
         return XmlElement.fromDomDocument(doc).getOnlyChildElementWithSameNamespaceOptionally("ok").isPresent();

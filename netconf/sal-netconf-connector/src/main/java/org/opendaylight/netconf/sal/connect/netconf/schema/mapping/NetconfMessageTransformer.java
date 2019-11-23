@@ -20,11 +20,7 @@ import com.google.common.collect.Multimap;
 import com.google.common.collect.Multimaps;
 import java.io.IOException;
 import java.net.URISyntaxException;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Date;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import javax.annotation.Nonnull;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.stream.XMLStreamException;
@@ -266,15 +262,22 @@ public class NetconfMessageTransformer implements MessageTransformer<NetconfMess
                 || rpc.getNamespace().equals(NetconfMessageTransformUtil.CREATE_SUBSCRIPTION_RPC_QNAME.getNamespace());
     }
 
-    @Override
-    public synchronized DOMRpcResult toRpcResult(final NetconfMessage message, final SchemaPath rpc) {
+    private boolean isFromRestconf(StackTraceElement[] trace) {
+        return Arrays.stream(trace).anyMatch(e -> e.getClassName().contains("Restconf"));
+    }
+
+    /**
+     * 从  toRpcResult(final NetconfMessage message, final SchemaPath rpc) 拷贝，扩展StackTraceElement识别功能。
+     *
+     */
+    public DOMRpcResult toRpcResult(NetconfMessage message, SchemaPath rpc, StackTraceElement[] trace) {
         final NormalizedNode<?, ?> normalizedNode;
         final QName rpcQName = rpc.getLastComponent();
         if (NetconfMessageTransformUtil.isDataRetrievalOperation(rpcQName)) {
             final Element xmlData = NetconfMessageTransformUtil.getDataSubtree(message.getDocument());
 
             SchemaContext tempContext = schemaContext;
-            if( isUTResult(xmlData)) {
+            if (isUTResult(xmlData) && !isFromRestconf(trace)) {
                 tempContext = gctx;
             }
             final ContainerSchemaNode schemaForDataRead =
@@ -285,6 +288,54 @@ public class NetconfMessageTransformer implements MessageTransformer<NetconfMess
                 final NormalizedNodeResult resultHolder = new NormalizedNodeResult();
                 final NormalizedNodeStreamWriter writer = ImmutableNormalizedNodeStreamWriter.from(resultHolder);
                 final XmlParserStream xmlParser = XmlParserStream.create(writer, tempContext, schemaForDataRead,
+                        strictParsing);
+                xmlParser.traverse(new DOMSource(xmlData));
+                dataNode = (ContainerNode) resultHolder.getResult();
+            } catch (XMLStreamException | URISyntaxException | IOException | ParserConfigurationException
+                    | SAXException e) {
+                throw new IllegalArgumentException(String.format("Failed to parse data response %s", xmlData), e);
+            }
+
+            normalizedNode = Builders.containerBuilder()
+                    .withNodeIdentifier(new YangInstanceIdentifier
+                            .NodeIdentifier(NetconfMessageTransformUtil.NETCONF_RPC_REPLY_QNAME))
+                    .withChild(dataNode).build();
+        } else {
+
+            Map<QName, RpcDefinition> currentMappedRpcs = mappedRpcs;
+
+            // Determine whether a base netconf operation is being invoked
+            // and also check if the device exposed model for base netconf.
+            // If no, use pre built base netconf operations model
+            final boolean needToUseBaseCtx = mappedRpcs.get(rpcQName) == null && isBaseOrNotificationRpc(rpcQName);
+            if (needToUseBaseCtx) {
+                currentMappedRpcs = baseSchema.getMappedRpcs();
+            }
+
+            final RpcDefinition rpcDefinition = currentMappedRpcs.get(rpcQName);
+            Preconditions.checkArgument(rpcDefinition != null,
+                    "Unable to parse response of %s, the rpc is unknown", rpcQName);
+
+            // In case no input for rpc is defined, we can simply construct the payload here
+            normalizedNode = parseResult(message, rpcDefinition);
+        }
+        return new DefaultDOMRpcResult(normalizedNode);
+    }
+
+    @Override
+    public synchronized DOMRpcResult toRpcResult(final NetconfMessage message, final SchemaPath rpc) {
+        final NormalizedNode<?, ?> normalizedNode;
+        final QName rpcQName = rpc.getLastComponent();
+        if (NetconfMessageTransformUtil.isDataRetrievalOperation(rpcQName)) {
+            final Element xmlData = NetconfMessageTransformUtil.getDataSubtree(message.getDocument());
+            final ContainerSchemaNode schemaForDataRead =
+                    NetconfMessageTransformUtil.createSchemaForDataRead(schemaContext);
+            final ContainerNode dataNode;
+
+            try {
+                final NormalizedNodeResult resultHolder = new NormalizedNodeResult();
+                final NormalizedNodeStreamWriter writer = ImmutableNormalizedNodeStreamWriter.from(resultHolder);
+                final XmlParserStream xmlParser = XmlParserStream.create(writer, schemaContext, schemaForDataRead,
                         strictParsing);
                 xmlParser.traverse(new DOMSource(xmlData));
                 dataNode = (ContainerNode) resultHolder.getResult();

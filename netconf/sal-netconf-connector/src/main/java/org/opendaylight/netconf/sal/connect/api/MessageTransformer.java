@@ -23,6 +23,15 @@ public interface MessageTransformer<M> {
     DOMRpcResult toRpcResult(M message, SchemaPath rpc);
 
     /**
+     *  识别来自rest的调用，不使用global context转换normalized node.
+     *
+     * @param message
+     * @param rpc
+     * @return
+     */
+    DOMRpcResult toRpcResult(M message, SchemaPath rpc, StackTraceElement[] trace);
+
+    /**
      * Parse action into message for request.
      *
      * @param action - action schema path
