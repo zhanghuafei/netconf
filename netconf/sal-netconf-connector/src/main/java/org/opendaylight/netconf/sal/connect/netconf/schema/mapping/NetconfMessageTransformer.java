@@ -68,8 +68,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
-import org.w3c.dom.Node;
-import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 
 public class NetconfMessageTransformer implements MessageTransformer<NetconfMessage> {
@@ -262,8 +260,23 @@ public class NetconfMessageTransformer implements MessageTransformer<NetconfMess
                 || rpc.getNamespace().equals(NetconfMessageTransformUtil.CREATE_SUBSCRIPTION_RPC_QNAME.getNamespace());
     }
 
-    private boolean isFromRestconf(StackTraceElement[] trace) {
-        return Arrays.stream(trace).anyMatch(e -> e.getClassName().contains("Restconf"));
+    /**
+     * 来源于RESTCONF非dvm
+     */
+    private boolean isRestconfNotDvm(StackTraceElement[] trace) {
+        boolean isRestconf = false;
+        boolean isDvm = false;
+
+        for(StackTraceElement e : trace) {
+            if(e.getClassName().contains("Restconf")) {
+                isRestconf = true;
+            }
+            if(e.getClassName().contains("com.utstar.platform.dvm")) {
+                isDvm = true;
+            }
+        }
+
+        return isRestconf && !isDvm;
     }
 
     /**
@@ -277,7 +290,9 @@ public class NetconfMessageTransformer implements MessageTransformer<NetconfMess
             final Element xmlData = NetconfMessageTransformUtil.getDataSubtree(message.getDocument());
 
             SchemaContext tempContext = schemaContext;
-            if (isUTResult(xmlData) && !isFromRestconf(trace)) {
+
+            // 非restconf调用 或者restconf调用且dvm 则使用global
+            if (isUTResult(xmlData) && !isRestconfNotDvm(trace)) {
                 tempContext = gctx;
             }
             final ContainerSchemaNode schemaForDataRead =
