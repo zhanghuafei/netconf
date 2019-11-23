@@ -260,9 +260,19 @@ public class NetconfMessageTransformer implements MessageTransformer<NetconfMess
                 || rpc.getNamespace().equals(NetconfMessageTransformUtil.CREATE_SUBSCRIPTION_RPC_QNAME.getNamespace());
     }
 
+    private boolean isRestconfReadConfig(StackTraceElement[] trace) {
+        for(StackTraceElement e : trace) {
+            if(e.getClassName().contains("BrokerFacade") && e.getMethodName().equals("readConfigurationData")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * 来源于RESTCONF非dvm
      */
+    @Deprecated
     private boolean isRestconfNotDvm(StackTraceElement[] trace) {
         boolean isRestconf = false;
         boolean isDvm = false;
@@ -291,8 +301,8 @@ public class NetconfMessageTransformer implements MessageTransformer<NetconfMess
 
             SchemaContext tempContext = schemaContext;
 
-            // 非restconf调用 或者restconf调用且dvm 则使用global
-            if (isUTResult(xmlData) && !isRestconfNotDvm(trace)) {
+            // 非restconf read config数据
+            if (isUTResult(xmlData) && !isRestconfReadConfig(trace)) {
                 tempContext = gctx;
             }
             final ContainerSchemaNode schemaForDataRead =
