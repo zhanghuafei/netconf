@@ -116,10 +116,9 @@ public class NetconfPagingServiceImpl implements NetconfPagingService {
         YangInstanceIdentifier yangII = NetconfPagingService.toTableYangII(moduleName);
         return find(nodeId, moduleName, start, num, expressions).transform(resutOpt -> {
             if (!resutOpt.isPresent()) {
-                return Optional.of((T) codec.fromNormalizedNode(yangII, resutOpt.get()).getValue());
+                return Optional.<T>absent();
             }
-            return Optional.<T>absent();
-
+            return Optional.of((T) codec.fromNormalizedNode(yangII, resutOpt.get()).getValue());
         }, MoreExecutors.directExecutor());
     }
 
