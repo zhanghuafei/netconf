@@ -33,18 +33,18 @@ import org.opendaylight.yangtools.yang.data.api.YangInstanceIdentifier;
 import org.opendaylight.yangtools.yang.data.api.schema.*;
 import org.opendaylight.yangtools.yang.data.impl.schema.Builders;
 import org.opendaylight.yangtools.yang.data.impl.schema.builder.api.NormalizedNodeAttrBuilder;
+import org.opendaylight.yangtools.yang.model.api.Module;
 import org.opendaylight.yangtools.yang.model.api.SchemaPath;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 
 import javax.annotation.Nullable;
 import javax.xml.transform.dom.DOMSource;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
-import static org.opendaylight.netconf.sal.connect.netconf.sal.ExtCmdInputFactory.EXT_CMD_RPC_QNAME;
-import static org.opendaylight.netconf.sal.connect.netconf.sal.ExtCmdInputFactory.UTSTARCOM_EXT;
+import java.util.stream.Collectors;
 import static org.opendaylight.netconf.sal.connect.netconf.util.NetconfMessageTransformUtil.*;
 
 /**
@@ -59,6 +59,8 @@ public class NetconfPagingServiceImpl implements NetconfPagingService {
 
     private static final String DEFAULT_TOPOLOGY_NAME = "topology-netconf";
     private static final String CONDITION_REGEX = "(\\w+)([>,<,=]{1})(.*)";
+
+    private static final String EXT_MODULE_NAME = "ExtCmd";
 
 
     private static final YangInstanceIdentifier DEFAULT_TOPOLOGY_NODE =
@@ -89,16 +91,26 @@ public class NetconfPagingServiceImpl implements NetconfPagingService {
             future.setException(new IllegalStateException("Specified mount point " + nodeId + " not exist"));
             return future;
         }
+
+        List<Module> modules = mountPointOpt.get().getSchemaContext().getModules().stream().filter(module -> module.getName().equals(EXT_MODULE_NAME)).collect(Collectors.toList()
+        );
+        if(modules == null  || modules.isEmpty()) {
+            SettableFuture<Integer> future = SettableFuture.create();
+            future.setException(new IllegalStateException("Unable to find module " + EXT_MODULE_NAME));
+            return future;
+        }
+        ExtCmdInputFactory extCmdInputFactory = new ExtCmdInputFactory(modules.get(0));
+
         DOMRpcService rpcService = mountPointOpt.get().getService(DOMRpcService.class).get();
-        SchemaPath rpcType = SchemaPath.create(true, EXT_CMD_RPC_QNAME);
-        AnyXmlNode extCmdInput = ExtCmdInputFactory.createExtCmdInput(moduleName, type);
-        FluentFuture<DOMRpcResult> resultFuture = rpcService.invokeRpc(rpcType, NetconfMessageTransformUtil.wrap(EXT_CMD_RPC_QNAME, extCmdInput));
+        SchemaPath rpcType = SchemaPath.create(true, extCmdInputFactory.extCmdRpcName);
+        AnyXmlNode extCmdInput = extCmdInputFactory.createExtCmdInput(moduleName, type);
+        FluentFuture<DOMRpcResult> resultFuture = rpcService.invokeRpc(rpcType, NetconfMessageTransformUtil.wrap(extCmdInputFactory.extCmdRpcName, extCmdInput));
         return resultFuture.transform(domRpcResult -> {
             Preconditions.checkArgument(domRpcResult.getErrors().isEmpty(), "%s: Unable to query count of %s, errors: %s",
                     nodeId, moduleName, domRpcResult.getErrors());
             final DataContainerChild<? extends YangInstanceIdentifier.PathArgument, ?> reply =
                     ((ContainerNode) domRpcResult.getResult())
-                            .getChild(NetconfMessageTransformUtil.toId(QName.create(UTSTARCOM_EXT, "reply").intern())).get();
+                            .getChild(NetconfMessageTransformUtil.toId(QName.create(extCmdInputFactory.moduleQname, "reply").intern())).get();
 
             DOMSource domSource = ((AnyXmlNode) reply).getValue();
             Element domReply = (Element) domSource.getNode();
