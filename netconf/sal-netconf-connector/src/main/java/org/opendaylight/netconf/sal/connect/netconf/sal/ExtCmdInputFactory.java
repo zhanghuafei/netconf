@@ -9,6 +9,8 @@ import org.opendaylight.yangtools.yang.data.api.schema.AnyXmlNode;
 import org.opendaylight.yangtools.yang.data.api.schema.NormalizedNode;
 import org.opendaylight.yangtools.yang.data.impl.schema.Builders;
 import org.opendaylight.yangtools.yang.data.impl.schema.builder.api.NormalizedNodeAttrBuilder;
+import org.opendaylight.yangtools.yang.model.api.Module;
+import org.opendaylight.yangtools.yang.model.api.RpcDefinition;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -19,23 +21,28 @@ import java.util.Map;
 import static org.opendaylight.netconf.sal.connect.netconf.sal.NetconfPagingService.*;
 
 public class ExtCmdInputFactory {
-    public static final QName UTSTARCOM_EXT =
-            QName.create("urn.utstar:uar:ExtCmd", "2017-11-02", "utstarcom-ext").intern();
+    public final QName moduleQname;
+    public final QName command;
+    public final QName extCmdRpcName;
 
-    public static final QName COMMAND = QName.create(UTSTARCOM_EXT, "Command");
-    public static final QName EXT_CMD_RPC_QNAME = QName.create(UTSTARCOM_EXT, "extcmd");
 
-    public static AnyXmlNode createExtCmdInput(String moduleName, TableType type) {
+    public ExtCmdInputFactory(Module extCmdModule) {
+        moduleQname = QName.create(extCmdModule.getNamespace().toString(), extCmdModule.getRevision().get().toString(), extCmdModule.getName()).intern();
+        command = QName.create(moduleQname, "Command");
+        extCmdRpcName = QName.create(moduleQname, "extcmd");
+    }
+
+    public AnyXmlNode createExtCmdInput(String moduleName, TableType type) {
         Preconditions.checkNotNull(type);
         final NormalizedNodeAttrBuilder<YangInstanceIdentifier.NodeIdentifier, DOMSource, AnyXmlNode> anyXmlBuilder =
                 Builders.anyXmlBuilder().withNodeIdentifier(new YangInstanceIdentifier.NodeIdentifier(
-                        QName.create(UTSTARCOM_EXT, COMMAND.getLocalName()).intern()));
+                        QName.create(moduleQname, command.getLocalName()).intern()));
         Map<QName, String> attributes = Maps.newHashMap();
         anyXmlBuilder.withAttributes(attributes);
 
         Document doc = XmlUtil.newDocument();
         final Element element =
-                doc.createElementNS(COMMAND.getNamespace().toString(), COMMAND.getLocalName());
+                doc.createElementNS(command.getNamespace().toString(), command.getLocalName());
 
         element.appendChild(createExtCmds(doc, moduleName, type));
         anyXmlBuilder.withValue(new DOMSource(element));
