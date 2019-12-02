@@ -49,7 +49,7 @@ public class AcrossDeviceTransCommitFailedException extends TransactionCommitFai
 
 	@Override
 	public String getMessage() {
-		if(idToErrMsgs.isEmpty()) {
+		if(idToErrMsgs ==null || idToErrMsgs.isEmpty()) {
 			return super.getMessage();
 		}
 		return super.getMessage() + ":" + idToErrMsgs;
