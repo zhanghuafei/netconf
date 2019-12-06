@@ -25,66 +25,72 @@ public class ExtCmdInputFactory {
     public final QName command;
     public final QName extCmdRpcName;
 
-
     public ExtCmdInputFactory(Module extCmdModule) {
         moduleQname = QName.create(extCmdModule.getNamespace().toString(), extCmdModule.getRevision().get().toString(), extCmdModule.getName()).intern();
         command = QName.create(moduleQname, "Command");
         extCmdRpcName = QName.create(moduleQname, "extcmd");
     }
 
-    public AnyXmlNode createExtCmdInput(String moduleName, TableType type) {
-        Preconditions.checkNotNull(type);
+    public AnyXmlNode createExtCmdInput(Integer indexValue, String cmdNameValue, String operationValue, Integer timeoutValue, Integer syncValue, String paraValue) {
         final NormalizedNodeAttrBuilder<YangInstanceIdentifier.NodeIdentifier, DOMSource, AnyXmlNode> anyXmlBuilder =
                 Builders.anyXmlBuilder().withNodeIdentifier(new YangInstanceIdentifier.NodeIdentifier(
                         QName.create(moduleQname, command.getLocalName()).intern()));
-        Map<QName, String> attributes = Maps.newHashMap();
-        anyXmlBuilder.withAttributes(attributes);
 
         Document doc = XmlUtil.newDocument();
         final Element element =
                 doc.createElementNS(command.getNamespace().toString(), command.getLocalName());
 
-        element.appendChild(createExtCmds(doc, moduleName, type));
+        element.appendChild(createExtCmds(doc, indexValue, cmdNameValue, operationValue, timeoutValue, syncValue, paraValue));
         anyXmlBuilder.withValue(new DOMSource(element));
         return anyXmlBuilder.build();
     }
 
-    private static Node createExtCmds(Document doc, String moduleName, TableType type) {
+    private static Element createExtCmds(Document doc, Integer indexValue, String cmdNameValue, String operationValue, Integer timeoutValue, Integer syncValue, String paraValue) {
         Element extCmds = doc.createElement("ExtCmds");
-        extCmds.appendChild(createExtCmd(doc, moduleName, type));
+        Element extCmd = createExtCmd(doc, indexValue, cmdNameValue, operationValue, timeoutValue, syncValue, paraValue);
+        extCmds.appendChild(extCmd);
         return extCmds;
     }
 
-    private static Node createExtCmd(Document doc, String moduleName, TableType type) {
+    private static Element createExtCmd(Document doc, Integer indexValue, String cmdNameValue, String operationValue, Integer timeoutValue, Integer syncValue, String paraValue) {
         Element extCmd = doc.createElement("ExtCmd");
 
         Element index = doc.createElement("Index");
-        index.appendChild(doc.createTextNode("1"));
+        if (index != null) {
+            index.appendChild(doc.createTextNode(String.valueOf(indexValue)));
+            extCmd.appendChild(index);
+        }
 
         Element cmdName = doc.createElement("CmdName");
-        cmdName.appendChild(doc.createTextNode("queryCnt"));
+        if (cmdName != null) {
+            cmdName.appendChild(doc.createTextNode(cmdNameValue));
+            extCmd.appendChild(cmdName);
+        }
 
         Element operation = doc.createElement("Operation");
-        operation.appendChild(doc.createTextNode("execute"));
+        if (operation != null) {
+            operation.appendChild(doc.createTextNode(operationValue));
+            extCmd.appendChild(operation);
+        }
 
         Element timeout = doc.createElement("Timeout");
-        timeout.appendChild(doc.createTextNode("10"));
+        if (timeout != null) {
+            timeout.appendChild(doc.createTextNode(String.valueOf(timeoutValue)));
+            extCmd.appendChild(timeout);
+        }
 
         Element sync = doc.createElement("Sync");
-        sync.appendChild(doc.createTextNode("1"));
+        if (sync != null) {
+            sync.appendChild(doc.createTextNode(String.valueOf(syncValue)));
+            extCmd.appendChild(sync);
+        }
 
-        String paraValue = String.format("{{\"DsName\",{String,\"%s\"}},{\"TblName\",{String,\"%s\"}}}", type.toString(), moduleName);
         Element params = doc.createElement("Params");
-        params.appendChild(doc.createTextNode(paraValue));
-
-        extCmd.appendChild(index);
-        extCmd.appendChild(cmdName);
-        extCmd.appendChild(operation);
-        extCmd.appendChild(timeout);
-        extCmd.appendChild(sync);
-        extCmd.appendChild(params);
+        if (params != null) {
+            params.appendChild(doc.createTextNode(paraValue));
+            extCmd.appendChild(params);
+        }
 
         return extCmd;
     }
-
 }

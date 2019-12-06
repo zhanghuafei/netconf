@@ -12,6 +12,7 @@ import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.FluentFuture;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
@@ -42,49 +43,41 @@ import javax.annotation.Nullable;
 import javax.xml.transform.dom.DOMSource;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+
 import static org.opendaylight.netconf.sal.connect.netconf.util.NetconfMessageTransformUtil.*;
 
 /**
  * Netconf分页功能
  * <p>
+ *
  * @Author Huafei Zhang
  */
 public class NetconfPagingServiceImpl implements NetconfPagingService {
 
     private DOMMountPointService domMountService;
     final private BindingNormalizedNodeSerializer codec;
+    private ExtCmdService extCmdService;
 
-    private static final String DEFAULT_TOPOLOGY_NAME = "topology-netconf";
     private static final String CONDITION_REGEX = "(\\w+)(>=|<=|<|=|>){1}(.*)";
-
-    private static final String EXT_MODULE_NAME = "ExtCmd";
-
-
-    private static final YangInstanceIdentifier DEFAULT_TOPOLOGY_NODE =
-            YangInstanceIdentifier.builder().node(NetworkTopology.QNAME).node(Topology.QNAME)
-                    .nodeWithKey(Topology.QNAME, QName.create(Topology.QNAME, "topology-id"), DEFAULT_TOPOLOGY_NAME)
-                    .node(Node.QNAME).build();
 
     private static final String XPATH = "xpath";
     private static final QName NETCONF_SELECT_QNAME = QName.create(NETCONF_QNAME, "select").intern();
     private static final String NAMESPACE_PREFIX = "t";
 
-    public NetconfPagingServiceImpl(BindingNormalizedNodeSerializer codec, DOMMountPointService domMountService) {
+    public NetconfPagingServiceImpl(BindingNormalizedNodeSerializer codec, DOMMountPointService domMountService, ExtCmdService extCmdService) {
         this.codec = codec;
         this.domMountService = domMountService;
-    }
-
-    private YangInstanceIdentifier toYangNodeII(String nodeId) {
-        return YangInstanceIdentifier.builder(DEFAULT_TOPOLOGY_NODE)
-                .nodeWithKey(Node.QNAME, QName.create(Node.QNAME, "node-id"), nodeId).build();
+        this.extCmdService = extCmdService;
     }
 
     public ListenableFuture<Integer> queryCount(String nodeId, String moduleName, TableType type) {
         Preconditions.checkNotNull(type, "Table type should not be null");
-        YangInstanceIdentifier nodeII = toYangNodeII(nodeId);
+
+        YangInstanceIdentifier nodeII = ExtCmdService.toYangNodeII(nodeId);
         Optional<DOMMountPoint> mountPointOpt = domMountService.getMountPoint(nodeII);
         if (!mountPointOpt.isPresent()) {
             SettableFuture<Integer> future = SettableFuture.create();
@@ -92,34 +85,27 @@ public class NetconfPagingServiceImpl implements NetconfPagingService {
             return future;
         }
 
-        List<Module> modules = mountPointOpt.get().getSchemaContext().getModules().stream().filter(module -> module.getName().equals(EXT_MODULE_NAME)).collect(Collectors.toList()
-        );
-        if(modules == null  || modules.isEmpty()) {
+        Set<Module> modules = mountPointOpt.get().getSchemaContext().findModules(moduleName);
+        if (modules == null || modules.isEmpty()) {
             SettableFuture<Integer> future = SettableFuture.create();
-            future.setException(new IllegalStateException("Unable to find module " + EXT_MODULE_NAME));
+            future.setException(new IllegalStateException("Unable to find module " + moduleName));
             return future;
         }
-        ExtCmdInputFactory extCmdInputFactory = new ExtCmdInputFactory(modules.get(0));
 
-        DOMRpcService rpcService = mountPointOpt.get().getService(DOMRpcService.class).get();
-        SchemaPath rpcType = SchemaPath.create(true, extCmdInputFactory.extCmdRpcName);
-        AnyXmlNode extCmdInput = extCmdInputFactory.createExtCmdInput(moduleName, type);
-        FluentFuture<DOMRpcResult> resultFuture = rpcService.invokeRpc(rpcType, NetconfMessageTransformUtil.wrap(extCmdInputFactory.extCmdRpcName, extCmdInput));
-        return resultFuture.transform(domRpcResult -> {
-            Preconditions.checkArgument(domRpcResult.getErrors().isEmpty(), "%s: Unable to query count of %s, errors: %s",
-                    nodeId, moduleName, domRpcResult.getErrors());
-            final DataContainerChild<? extends YangInstanceIdentifier.PathArgument, ?> reply =
-                    ((ContainerNode) domRpcResult.getResult())
-                            .getChild(NetconfMessageTransformUtil.toId(QName.create(extCmdInputFactory.moduleQname, "reply").intern())).get();
+        String paraValue = createCountPara(moduleName, type);
+        FluentFuture<String> resultFuture = extCmdService.extCmdTo(nodeId, 1, "queryCnt", "execute", 10, 1, paraValue);
 
-            DOMSource domSource = ((AnyXmlNode) reply).getValue();
-            Element domReply = (Element) domSource.getNode();
-            if(domReply.getFirstChild() == null || Strings.isNullOrEmpty(domReply.getFirstChild().getTextContent())) {
+        return resultFuture.transform(result -> {
+            if (result == null) {
                 return 0;
             }
-            String count = domReply.getFirstChild().getTextContent();
-            return Integer.parseInt(count);
+            return Integer.parseInt(result);
         }, MoreExecutors.directExecutor());
+    }
+
+    private String createCountPara(String moduleName, TableType type) {
+        String paraValue = String.format("{{\"DsName\",{String,\"%s\"}},{\"TblName\",{String,\"%s\"}}}", type.toString(), moduleName);
+        return paraValue;
     }
 
     @Override
@@ -140,7 +126,7 @@ public class NetconfPagingServiceImpl implements NetconfPagingService {
         checkArgument(start, num, expressions);
 
         YangInstanceIdentifier yangII = NetconfPagingService.toTableYangII(moduleName);
-        YangInstanceIdentifier nodeII = toYangNodeII(nodeId);
+        YangInstanceIdentifier nodeII = ExtCmdService.toYangNodeII(nodeId);
         Optional<DOMMountPoint> mountPointOpt = domMountService.getMountPoint(nodeII);
         if (!mountPointOpt.isPresent()) {
             SettableFuture<Optional<NormalizedNode<?, ?>>> future = SettableFuture.create();
@@ -173,7 +159,7 @@ public class NetconfPagingServiceImpl implements NetconfPagingService {
 
     private void checkArgument(@Nullable Integer start, @Nullable Integer num, @Nullable String[] expressions) {
         Preconditions.checkArgument(((start != null) && (num != null)) || (expressions != null), "at least one condition is specified");
-        if((start != null) && (num != null)) {
+        if ((start != null) && (num != null)) {
             Preconditions.checkArgument(start >= 0 && num > 0, "start and num should be non-negative");
         }
 
@@ -229,7 +215,7 @@ public class NetconfPagingServiceImpl implements NetconfPagingService {
     private String quoteExp(String expression) {
         Pattern pattern = Pattern.compile(CONDITION_REGEX);
         Matcher matcher = pattern.matcher(expression);
-        if(matcher.matches()) {
+        if (matcher.matches()) {
             String key = matcher.group(1);
             String operator = matcher.group(2);
             String value = matcher.group(3);
