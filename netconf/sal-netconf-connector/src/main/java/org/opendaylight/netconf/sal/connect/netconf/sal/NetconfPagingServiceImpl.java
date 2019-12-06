@@ -58,7 +58,7 @@ public class NetconfPagingServiceImpl implements NetconfPagingService {
     final private BindingNormalizedNodeSerializer codec;
 
     private static final String DEFAULT_TOPOLOGY_NAME = "topology-netconf";
-    private static final String CONDITION_REGEX = "(\\w+)([>,<,=]{1})(.*)";
+    private static final String CONDITION_REGEX = "(\\w+)(>=|<=|<|=|>){1}(.*)";
 
     private static final String EXT_MODULE_NAME = "ExtCmd";
 
