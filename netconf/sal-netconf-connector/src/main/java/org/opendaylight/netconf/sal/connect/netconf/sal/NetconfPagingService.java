@@ -54,7 +54,7 @@ public interface NetconfPagingService {
      * @param type      cfg or stat
      * @return 表的总条数
      */
-    ListenableFuture<Integer> queryCount(String nodeId, String tableName, TableType type);
+    ListenableFuture<Integer> queryCount(String nodeId, String tableName, TableType type, @Nullable String... expressions);
 
     /***
      *
