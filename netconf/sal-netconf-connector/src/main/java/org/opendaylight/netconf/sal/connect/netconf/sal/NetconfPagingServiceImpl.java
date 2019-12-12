@@ -74,7 +74,7 @@ public class NetconfPagingServiceImpl implements NetconfPagingService {
         this.extCmdService = extCmdService;
     }
 
-    public ListenableFuture<Integer> queryCount(String nodeId, String moduleName, TableType type) {
+    public ListenableFuture<Integer> queryCount(String nodeId, String moduleName, TableType type, @Nullable String... expressions) {
         Preconditions.checkNotNull(type, "Table type should not be null");
 
         YangInstanceIdentifier nodeII = ExtCmdService.toYangNodeII(nodeId);
@@ -92,7 +92,7 @@ public class NetconfPagingServiceImpl implements NetconfPagingService {
             return future;
         }
 
-        String paraValue = createCountPara(moduleName, type);
+        String paraValue = createCountPara(moduleName, type, expressions);
         FluentFuture<String> resultFuture = extCmdService.extCmdTo(nodeId, 1, "queryCnt", "execute", 10, 1, paraValue);
 
         return resultFuture.transform(result -> {
@@ -103,9 +103,23 @@ public class NetconfPagingServiceImpl implements NetconfPagingService {
         }, MoreExecutors.directExecutor());
     }
 
-    private String createCountPara(String moduleName, TableType type) {
-        String paraValue = String.format("{{\"DsName\",{String,\"%s\"}},{\"TblName\",{String,\"%s\"}}}", type.toString(), moduleName);
-        return paraValue;
+    private String createCountPara(String moduleName, TableType type, @Nullable String[] expressions) {
+
+        String paraValue = String.format("{\"DsName\",{String,\"%s\"}},{\"TblName\",{String,\"%s\"}}", type.toString(), moduleName);
+        if (expressions != null && expressions.length > 0) {
+            //{"filter",{String,"Almid>100 and Almid<500"}
+            StringBuilder targetExp = new StringBuilder();
+            targetExp.append(expressions[0]);
+            if (expressions.length > 1) {
+                for (int i = 1; i < expressions.length; i++) {
+                    targetExp.append(" and ");
+                    targetExp.append(expressions[i]);
+                }
+            }
+            paraValue = paraValue + String.format("{\"filter\",{String,\"%s\"}", targetExp.toString());
+        }
+
+        return "{" + paraValue + "}";
     }
 
     @Override
