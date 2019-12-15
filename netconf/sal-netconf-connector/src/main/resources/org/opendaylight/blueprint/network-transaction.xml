@@ -13,7 +13,7 @@
 		interface="org.opendaylight.mdsal.binding.dom.codec.api.BindingNormalizedNodeSerializer" />
 	
 	<bean id="adDataBroker"
-		class="org.opendaylight.netconf.sal.connect.netconf.sal.AcrossDeviceDataBrokerImpl">
+		class="org.opendaylight.netconf.sal.connect.netconf.sal.AcrossDeviceDataBrokerImpl" destroy-method="close">
 		<argument ref="domMountPointService" />
 		<argument ref="mappingCodec" />
 	</bean>

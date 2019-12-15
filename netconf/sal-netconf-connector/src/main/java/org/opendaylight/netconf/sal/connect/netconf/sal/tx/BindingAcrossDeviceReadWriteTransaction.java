@@ -16,6 +16,7 @@ import org.opendaylight.controller.md.sal.dom.api.DOMDataReadOnlyTransaction;
 import org.opendaylight.controller.md.sal.dom.api.DOMMountPoint;
 import org.opendaylight.controller.md.sal.dom.api.DOMMountPointService;
 import org.opendaylight.mdsal.binding.dom.codec.api.BindingNormalizedNodeSerializer;
+import org.opendaylight.netconf.sal.connect.netconf.sal.isolation.TransactionScheduler;
 import org.opendaylight.yangtools.yang.binding.DataObject;
 import org.opendaylight.yangtools.yang.binding.InstanceIdentifier;
 import org.opendaylight.yangtools.yang.data.api.YangInstanceIdentifier;
@@ -37,8 +38,8 @@ public class BindingAcrossDeviceReadWriteTransaction extends BindingAcrossDevice
     private DOMMountPointService mountService;
 
     public BindingAcrossDeviceReadWriteTransaction(BindingNormalizedNodeSerializer codec,
-        DOMMountPointService mountService) {
-        super(codec, mountService);
+        DOMMountPointService mountService, TransactionScheduler transScheduler) {
+        super(codec, mountService, transScheduler);
         this.codec = codec;
         this.mountService = mountService;
     }

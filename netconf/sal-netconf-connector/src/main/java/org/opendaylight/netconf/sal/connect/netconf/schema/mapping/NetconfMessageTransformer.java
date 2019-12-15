@@ -275,7 +275,7 @@ public class NetconfMessageTransformer implements MessageTransformer<NetconfMess
 
     private boolean isRestconfReadConfig(StackTraceElement[] trace) {
         for(StackTraceElement e : trace) {
-            if(e.getClassName().contains("BrokerFacade") && e.getMethodName().equals("readConfigurationData")) {
+            if(e.getClassName().contains("BrokerFacade") && !e.getMethodName().contains("BrokerFacade.invokeRpc")) {
                 return true;
             }
         }
