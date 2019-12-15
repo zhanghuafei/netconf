@@ -17,8 +17,13 @@
                              update-strategy="none">
         <cm:default-properties>
             <cm:property name="name-prefix" value="remote-connector-processing-executor"/>
+<<<<<<< HEAD
+            <cm:property name="min-thread-count-flexible-thread-pool" value="10"/>
+            <cm:property name="max-thread-count-flexible-thread-pool" value="4"/>
+=======
             <cm:property name="min-thread-count-flexible-thread-pool" value="1"/>
             <cm:property name="max-thread-count-flexible-thread-pool" value="20"/>
+>>>>>>> FEATURE: 事务隔离性增强实现
             <cm:property name="keep-alive-millis-flexible-thread-pool" value="600000"/>
             <cm:property name="max-thread-count-scheduled-thread-pool" value="8"/>
         </cm:default-properties>
