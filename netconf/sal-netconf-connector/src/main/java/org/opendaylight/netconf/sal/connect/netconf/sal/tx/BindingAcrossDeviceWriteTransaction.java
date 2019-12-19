@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -118,7 +119,7 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
      */
     private static class TransactionResultCallBack {
         // finished devices count
-        private int count = 0;
+        private AtomicInteger count = new AtomicInteger(0);
         // size of devices relevant to this across device transaction.
         private int size;
         // is the across device transaction successful.
@@ -146,8 +147,8 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
             }
 
             private void handleIfFinished(Throwable exception) {
-                count++;
-                if (count == size) {
+                int localCount = count.incrementAndGet();
+                if (localCount == size) {
                     if (isSucessful) {
                         actxResult.set(RpcResultBuilder.<Void> success().build());
                     } else {
