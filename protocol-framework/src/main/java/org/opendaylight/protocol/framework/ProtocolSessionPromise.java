@@ -55,7 +55,7 @@ final class ProtocolSessionPromise<S extends ProtocolSession<?>> extends Default
             }
             this.b.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, timeout);
             final ChannelFuture connectFuture = this.b.connect(this.address);
-            // Add listener that attempts reconnect by invoking this method again.
+            //            // Add listener that attempts reconnect by invoking this method again.
             connectFuture.addListener(new BootstrapConnectListener(lock));
             this.pending = connectFuture;
         } catch (final Exception e) {

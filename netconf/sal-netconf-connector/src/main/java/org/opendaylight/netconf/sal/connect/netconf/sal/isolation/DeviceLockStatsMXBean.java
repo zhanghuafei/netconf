@@ -48,6 +48,22 @@ public interface DeviceLockStatsMXBean {
     long getTotalPostponeTimes();
 
     /**
+     * 事务创建的初始限速值
+     */
+    long getTransactionCreationInitialRateLimit();
+
+    /**
+     * 任务（事务）队列所限制的到达率
+     * 防止队列过长
+     */
+    double getCurrentRateLimit();
+
+    /**
+     * 任务（事务）队列水位
+     */
+    long getTaskCongestionWatermark();
+
+    /**
      * 操作：打印LockPool中的信息
      */
     void printDeviceLocks();
