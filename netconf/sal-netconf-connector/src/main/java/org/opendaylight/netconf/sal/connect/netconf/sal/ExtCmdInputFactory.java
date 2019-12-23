@@ -56,37 +56,37 @@ public class ExtCmdInputFactory {
         Element extCmd = doc.createElement("ExtCmd");
 
         Element index = doc.createElement("Index");
-        if (index != null) {
+        if (indexValue != null) {
             index.appendChild(doc.createTextNode(String.valueOf(indexValue)));
             extCmd.appendChild(index);
         }
 
         Element cmdName = doc.createElement("CmdName");
-        if (cmdName != null) {
+        if (cmdNameValue != null) {
             cmdName.appendChild(doc.createTextNode(cmdNameValue));
             extCmd.appendChild(cmdName);
         }
 
         Element operation = doc.createElement("Operation");
-        if (operation != null) {
+        if (operationValue != null) {
             operation.appendChild(doc.createTextNode(operationValue));
             extCmd.appendChild(operation);
         }
 
         Element timeout = doc.createElement("Timeout");
-        if (timeout != null) {
+        if (timeoutValue != null) {
             timeout.appendChild(doc.createTextNode(String.valueOf(timeoutValue)));
             extCmd.appendChild(timeout);
         }
 
         Element sync = doc.createElement("Sync");
-        if (sync != null) {
+        if (syncValue != null) {
             sync.appendChild(doc.createTextNode(String.valueOf(syncValue)));
             extCmd.appendChild(sync);
         }
 
         Element params = doc.createElement("Params");
-        if (params != null) {
+        if (paraValue != null) {
             params.appendChild(doc.createTextNode(paraValue));
             extCmd.appendChild(params);
         }
