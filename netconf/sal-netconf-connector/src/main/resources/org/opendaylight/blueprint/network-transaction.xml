@@ -11,11 +11,29 @@
 
 	<reference id="mappingCodec"
 		interface="org.opendaylight.mdsal.binding.dom.codec.api.BindingNormalizedNodeSerializer" />
+
+	<cm:property-placeholder persistent-id="org.utstar.across.device.transaction.config"
+							 update-strategy="none">
+		<cm:default-properties>
+			<cm:property name="queue-wait-timeout" value="300"/>
+			<cm:property name="transaction-creation-initial-rate-limit" value="100"/>
+			<cm:property name="task-congestion-watermark" value="100"/>
+			<cm:property name="rate-limit-step-size" value="25"/>
+			<cm:property name="task-postpone-time-min" value="1000"/>
+			<cm:property name="task-postpone-time-max" value="5000"/>
+		</cm:default-properties>
+	</cm:property-placeholder>
 	
 	<bean id="adDataBroker"
 		class="org.opendaylight.netconf.sal.connect.netconf.sal.AcrossDeviceDataBrokerImpl" destroy-method="close">
 		<argument ref="domMountPointService" />
 		<argument ref="mappingCodec" />
+		<argument value="${queue-wait-timeout}" />
+		<argument value="${transaction-creation-initial-rate-limit}" />
+		<argument value="${task-congestion-watermark}" />
+		<argument value="${queue-wait-timeout}" />
+		<argument value="${task-postpone-time-min}" />
+		<argument value="${task-postpone-time-max}" />
 	</bean>
 
 	<reference id="schemaService"

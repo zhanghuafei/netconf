@@ -22,11 +22,10 @@ public class AcrossDeviceDataBrokerImpl implements AcrossDeviceDataBroker, AutoC
     private DOMMountPointService mountService;
     private TransactionScheduler transScheduler;
 
-    public AcrossDeviceDataBrokerImpl(BindingNormalizedNodeSerializer codec, DOMMountPointService mountService) {
+    public AcrossDeviceDataBrokerImpl(BindingNormalizedNodeSerializer codec, DOMMountPointService mountService, int waitTimeout, long transactionCreationInitialRateLimit, long taskCongestionWatermark, int rateLimitStepSize, int taskPostponeTimeMin, int taskPostponeTimeMax) {
         this.codec = codec;
         this.mountService = mountService;
-        this.transScheduler = TransactionScheduler.create();
-
+        this.transScheduler = new TransactionScheduler(waitTimeout, transactionCreationInitialRateLimit, taskCongestionWatermark, rateLimitStepSize, taskPostponeTimeMin, taskPostponeTimeMax);
         transScheduler.start();
     }
 

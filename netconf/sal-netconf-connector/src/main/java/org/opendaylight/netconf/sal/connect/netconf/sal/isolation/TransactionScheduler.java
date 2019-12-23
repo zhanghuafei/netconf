@@ -24,59 +24,58 @@ import org.opendaylight.yangtools.yang.binding.InstanceIdentifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
 
- /**
+/**
  * Schedule the execution of across device transaction on the basis of contending for the device lock.
- *
- * TODO: 1、参数配置化 2、防止队列堰塞的限速策略：参考地铁站的限制容量策略，容量可以动态调整，决策基于吞吐量和等待时间 3、 去除对于AbstractMXBean的依赖
- *
+ * <p>
+ * TODO: 1、参数配置化 2、 去除对于AbstractMXBean的依赖
  */
-public class TransactionScheduler extends AbstractMXBean implements DeviceLockStatsMXBean, AutoCloseable {
+public class TransactionScheduler implements AutoCloseable {
     private static final Logger LOG = LoggerFactory.getLogger(TransactionScheduler.class);
     private static final String THREAD_NAME = "ac-device-trans-with-lock-thread";
     private static final String CALLBACK_THREAD_NAME = "ac-device-trans-callback-thread";
     private static final String NETCONF_METRIC_NAME = "netconf";
-    private static final int DEFAULT_TASK_WAIT_TIMEOUT = 300000;
+    private static final int DEFAULT_TASK_WAIT_TIMEOUT = 300;
     private static final int DEFAULT_POSTPONE_TIME__MIN_MILLIS = 1000;
     private static final int DEFAULT_POSTPONE_TIME__MAX_MILLIS = 5000;
+    int taskPostponeTimeMin = DEFAULT_POSTPONE_TIME__MIN_MILLIS;
+    int taskPostponeTimeMax = DEFAULT_POSTPONE_TIME__MAX_MILLIS;
 
-    private ExecutorService taskExecutor = Executors.newSingleThreadExecutor(new ThreadFactory() {
+    // 假设吞吐量为3/s，按该队列容量以保证不会超时
+    // 达到该容量限制，应大致保证该容量不会继续增长
+    private static final int DEFAULT_TASK_CONGESTION_WATERMARK = DEFAULT_TASK_WAIT_TIMEOUT / 3;
 
-        private final AtomicLong threadNum = new AtomicLong();
+    private ExecutorService taskExecutor = Executors.newSingleThreadExecutor(new TransactionThreadFactory(THREAD_NAME));
 
-        @Override
-        public Thread newThread(Runnable r) {
-            return new Thread(r, String.format("%s-%d", THREAD_NAME, threadNum.incrementAndGet()));
-        }
-    });
-
-    private ExecutorService taskCallbackExecutor = Executors.newSingleThreadExecutor(new ThreadFactory() {
-        private final AtomicLong threadNum = new AtomicLong();
-
-        @Override
-        public Thread newThread(Runnable r) {
-            return new Thread(r, String.format("%s-%d", CALLBACK_THREAD_NAME, threadNum.incrementAndGet()));
-        }
-    });
+    private ExecutorService taskCallbackExecutor = Executors.newSingleThreadExecutor(new TransactionThreadFactory(CALLBACK_THREAD_NAME));
 
     // transaction will not set failed instantly after timeout.
     // task total time = wait time + execute time;
     private int waitTimeout = DEFAULT_TASK_WAIT_TIMEOUT;
 
     // JMX
-    // count of transaction which failed to acquire lock.
     private int failLockTransCount = 0;
     private AtomicLong totalSubmittedTransCount = new AtomicLong(0);
     private long totalPostponeTimes = 0;
     private boolean transDetailPrintSwitch = false;
+    private TransactionManagement transactionManagement;
 
     // METRIC
     private Timer timer;
     private JmxReporter reporter;
+
+    // RATE LIMIT
+    public static final int DEFAULT_TX_CREATION_INITIAL_RATE_LIMIT = 100;
+    public static final int DEFAULT_RATE_LIMIT_STEP_SIZE = 25;
+    private long transactionCreationInitialRateLimit = DEFAULT_TX_CREATION_INITIAL_RATE_LIMIT;
+    private long taskCongestionWatermark = DEFAULT_TASK_CONGESTION_WATERMARK;
+    private TransactionRateLimit rateLimit;
 
     // 事务队列
     private DelayQueue<DelayTask> taskQueue = new DelayQueue<>();
@@ -84,8 +83,19 @@ public class TransactionScheduler extends AbstractMXBean implements DeviceLockSt
     // contested by taskExecutor and taskCallbackExecutor
     private Set<DeviceLock> deviceLocks = ConcurrentHashMap.newKeySet();
 
-    private TransactionScheduler() {
-        super("DeviceLockStats", "LocktransScheduler", null);
+    public TransactionScheduler(int waitTimeout, long transactionCreationInitialRateLimit, long taskCongestionWatermark, int rateLimitStepSize, int taskPostponeTimeMin, int taskPostponeTimeMax) {
+        this.waitTimeout = waitTimeout;
+        this.transactionCreationInitialRateLimit = transactionCreationInitialRateLimit;
+        this.taskCongestionWatermark = taskCongestionWatermark;
+        rateLimit = new TransactionRateLimit(rateLimitStepSize);
+        this.taskPostponeTimeMin = taskPostponeTimeMin;
+        this.taskPostponeTimeMax = taskPostponeTimeMax;
+        this.transactionManagement = new TransactionManagement("DeviceLockStats", "LocktransScheduler", null);
+        initMetric();
+    }
+
+    public TransactionScheduler() {
+        this.transactionManagement = new TransactionManagement("DeviceLockStats", "LocktransScheduler", null);
         initMetric();
     }
 
@@ -96,14 +106,15 @@ public class TransactionScheduler extends AbstractMXBean implements DeviceLockSt
         reporter.start();
     }
 
-    public static TransactionScheduler create() {
-        return new TransactionScheduler();
-    }
-
     public FluentFuture<? extends CommitInfo> submit(BindingAcrossDeviceWriteTransaction wtx) {
         if (transDetailPrintSwitch) {
             LOG.debug("transaction {{}}: included operations is {}", wtx.getTransactionId(), wtx.getOperations());
         }
+
+        // WARN: 获取不到许可时，根据当前许可分配速度来计算沉睡时间
+        // 调整速度后，加速的许可分配速度不对已沉睡的线程有影响。
+        // 所以rate低的情况下，可能导致大量的线程沉睡很长的时间。
+        rateLimit.acquire();
 
         Timer.Context context = timer.time();
 
@@ -115,12 +126,13 @@ public class TransactionScheduler extends AbstractMXBean implements DeviceLockSt
         Futures.addCallback(delayTask.future, new FutureCallback<CommitInfo>() {
             @Override
             public void onSuccess(@NullableDecl CommitInfo result) {
+                // record successful request only
                 context.stop();
             }
 
             @Override
             public void onFailure(Throwable t) {
-                context.stop();
+                LOG.error(t.getMessage(), t);
             }
         }, MoreExecutors.directExecutor());
 
@@ -150,63 +162,8 @@ public class TransactionScheduler extends AbstractMXBean implements DeviceLockSt
     }
 
     @Override
-    public int getTotalLockedDeviceCount() {
-        return deviceLocks.size();
-    }
-
-    @Override
-    public int getTaskWaitTimeout() {
-        return waitTimeout;
-    }
-
-    @Override
-    public int getTaskQueueSize() {
-        return taskQueue.size();
-    }
-
-    @Override
-    public String getPostponeDelay() {
-        return "Random [" + DEFAULT_POSTPONE_TIME__MIN_MILLIS + "," + DEFAULT_POSTPONE_TIME__MAX_MILLIS + "]";
-    }
-
-    @Override
-    public int getFailLockTransCount() {
-        return failLockTransCount;
-    }
-
-    @Override
-    public long getTotalSubmittedTransCount() {
-        return totalSubmittedTransCount.get();
-    }
-
-    @Override
-    public long getTotalPostponeTimes() {
-        return totalPostponeTimes;
-    }
-
-    @Override
-    public void printDeviceLocks() {
-        System.out.println(deviceLocks);
-    }
-
-    @Override
-    public void clearAllLocks() {
-        deviceLocks.clear();
-    }
-
-    @Override
-    public void openTransDetailPrint() {
-        transDetailPrintSwitch = true;
-    }
-
-    @Override
-    public void closeTransDetailPrint() {
-        transDetailPrintSwitch = false;
-    }
-
-    @Override
     public void close() throws Exception {
-        unregister();
+        transactionManagement.unregister();
         reporter.close();
         SharedMetricRegistries.remove(NETCONF_METRIC_NAME);
 
@@ -236,15 +193,14 @@ public class TransactionScheduler extends AbstractMXBean implements DeviceLockSt
         }
 
         private long waitTime() {
-            return System.currentTimeMillis() - createTime;
+            return TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis() - createTime);
         }
 
         private void postPone() {
             totalPostponeTimes++;
             postPoneTimes++;
-            expectExecuteTime = expectExecuteTime + getRandomNumberInRange(DEFAULT_POSTPONE_TIME__MIN_MILLIS,
-                    DEFAULT_POSTPONE_TIME__MAX_MILLIS);
-
+            expectExecuteTime = expectExecuteTime + getRandomNumberInRange(taskPostponeTimeMin,
+                    taskPostponeTimeMax);
         }
 
         private void claimLocks() {
@@ -312,7 +268,7 @@ public class TransactionScheduler extends AbstractMXBean implements DeviceLockSt
 
     public void start() {
         // 注册MXBean
-        register();
+        transactionManagement.register();
         taskExecutor.submit(() -> {
 
                     while (true) {
@@ -335,7 +291,7 @@ public class TransactionScheduler extends AbstractMXBean implements DeviceLockSt
     /**
      * like redis zset element
      */
-    class DeviceLock {
+    static class DeviceLock {
         private InstanceIdentifier<?> ii;
 
         // used for monitoring lock duration.
@@ -376,6 +332,143 @@ public class TransactionScheduler extends AbstractMXBean implements DeviceLockSt
                     ", createTime=" + Instant.ofEpochMilli(createTime).plusMillis(TimeUnit.HOURS.toMillis(8)) +
                     ", transactionId=" + transactionId +
                     '}';
+        }
+    }
+
+
+    class TransactionRateLimit {
+
+        RateLimiter txRateLimiter = RateLimiter.create(transactionCreationInitialRateLimit);
+
+        private volatile long pollOnCount = 1;
+        private long stepSize;
+
+        public TransactionRateLimit(long stepSize) {
+            this.stepSize = stepSize;
+        }
+
+        void acquire() {
+            adjustRate();
+            txRateLimiter.acquire();
+        }
+
+        private void adjustRate() {
+            // 超过水位，限制流入，且避免队伍中任务等待超时
+            long submitted = totalSubmittedTransCount.get();
+            // stepsize是为后续更灵活的rate变化作准备
+            if (taskQueue.size() >= taskCongestionWatermark && submitted >= pollOnCount) {
+                // 堵塞表明流量峰持续时间较长，所以假设取一分钟的平均吞吐量是合理的
+                // 或者考虑折半递减方案
+                double newRate = timer.getOneMinuteRate();
+                txRateLimiter.setRate(newRate);
+                // 按照新的速率持续运行stepsize数量的事务
+                pollOnCount = stepSize + submitted;
+                // 水位低于限制一半，则将限制放开
+            } else if (taskQueue.size() < (taskCongestionWatermark / 2) && txRateLimiter.getRate() != transactionCreationInitialRateLimit) {
+                // WARN: 限制的变化不平滑，可能导致吞吐量曲线毛刺
+                txRateLimiter.setRate(transactionCreationInitialRateLimit);
+            }
+        }
+
+        double getRateLimit(){
+            return txRateLimiter.getRate();
+        }
+    }
+
+    private static class TransactionThreadFactory implements ThreadFactory {
+        private final AtomicLong threadNum = new AtomicLong();
+        private String threadName;
+
+        TransactionThreadFactory(String threadName) {
+            this.threadName = threadName;
+        }
+
+        @Override
+        public Thread newThread(Runnable r) {
+            return new Thread(r, String.format("%s-%d", threadName, threadNum.incrementAndGet()));
+        }
+    }
+
+    class TransactionManagement extends AbstractMXBean implements DeviceLockStatsMXBean {
+        /**
+         * Constructor.
+         *
+         * @param beanName     Used as the <code>name</code> property in the bean's ObjectName.
+         * @param beanType     Used as the <code>type</code> property in the bean's ObjectName.
+         * @param beanCategory Used as the <code>Category</code> property in the bean's ObjectName.
+         */
+        TransactionManagement(@Nonnull String beanName, @Nonnull String beanType, @Nullable String beanCategory) {
+            super(beanName, beanType, beanCategory);
+        }
+
+        @Override
+        public int getTotalLockedDeviceCount() {
+            return deviceLocks.size();
+        }
+
+        @Override
+        public int getTaskWaitTimeout() {
+            return waitTimeout;
+        }
+
+        @Override
+        public int getTaskQueueSize() {
+            return taskQueue.size();
+        }
+
+        @Override
+        public String getPostponeDelay() {
+            return "Random [" + taskPostponeTimeMin + "," + taskPostponeTimeMax + "]";
+        }
+
+        @Override
+        public int getFailLockTransCount() {
+            return failLockTransCount;
+        }
+
+        @Override
+        public long getTotalSubmittedTransCount() {
+            return totalSubmittedTransCount.get();
+        }
+
+        @Override
+        public long getTotalPostponeTimes() {
+            return totalPostponeTimes;
+        }
+
+        @Override
+        public long getTransactionCreationInitialRateLimit() {
+            return transactionCreationInitialRateLimit;
+        }
+
+        @Override
+        public double getCurrentRateLimit() {
+            return rateLimit.getRateLimit();
+        }
+
+        @Override
+        public long getTaskCongestionWatermark() {
+            return taskCongestionWatermark;
+        }
+
+        @Override
+        public void printDeviceLocks() {
+            System.out.println(deviceLocks);
+        }
+
+        @Override
+        public void clearAllLocks() {
+            deviceLocks.clear();
+        }
+
+        @Override
+        public void openTransDetailPrint() {
+            transDetailPrintSwitch = true;
+        }
+
+        @Override
+        public void closeTransDetailPrint() {
+            transDetailPrintSwitch = false;
         }
     }
 
