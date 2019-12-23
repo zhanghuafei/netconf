@@ -80,6 +80,7 @@ public class NetconfMessageTransformer implements MessageTransformer<NetconfMess
     private final MessageCounter counter;
     private final Map<QName, RpcDefinition> mappedRpcs;
     private final Multimap<QName, NotificationDefinition> mappedNotifications;
+    private final Multimap<QName, NotificationDefinition> globalMappedNotifications;
     private final boolean strictParsing;
     private final Set<ActionDefinition> actions;
 
@@ -95,6 +96,8 @@ public class NetconfMessageTransformer implements MessageTransformer<NetconfMess
         this.actions = getActions();
         this.mappedNotifications = Multimaps.index(schemaContext.getNotifications(),
             node -> node.getQName().withoutRevision());
+        this.globalMappedNotifications = Multimaps.index(gctx.getNotifications(),
+                node -> node.getQName().withoutRevision());
         this.baseSchema = baseSchema;
         this.strictParsing = strictParsing;
     }
@@ -135,12 +138,12 @@ public class NetconfMessageTransformer implements MessageTransformer<NetconfMess
             throw new IllegalArgumentException(
                     "Unable to parse notification " + message + ", cannot find namespace", e);
         }
-        final Collection<NotificationDefinition> notificationDefinitions = mappedNotifications.get(notificationNoRev);
-        Preconditions.checkArgument(notificationDefinitions.size() > 0,
-                "Unable to parse notification %s, unknown notification. Available notifications: %s",
-                notificationDefinitions, mappedNotifications.keySet());
-
-        final NotificationDefinition mostRecentNotification = getMostRecentNotification(notificationDefinitions);
+        final NotificationDefinition mostRecentNotification;
+        if(notificationNoRev.getNamespace().toString().contains("utstar")) {
+            mostRecentNotification = getNotificationDefinition(globalMappedNotifications, notificationNoRev);
+        } else {
+            mostRecentNotification = getNotificationDefinition(mappedNotifications, notificationNoRev);
+        }
 
         final ContainerSchemaNode notificationAsContainerSchemaNode =
                 NetconfMessageTransformUtil.createSchemaForNotification(mostRecentNotification);
@@ -150,6 +153,7 @@ public class NetconfMessageTransformer implements MessageTransformer<NetconfMess
         try {
             final NormalizedNodeResult resultHolder = new NormalizedNodeResult();
             final NormalizedNodeStreamWriter writer = ImmutableNormalizedNodeStreamWriter.from(resultHolder);
+            // FIXME 应区分ut通知和非UT通知
             final XmlParserStream xmlParser = XmlParserStream.create(writer, gctx,
                     notificationAsContainerSchemaNode, strictParsing);
             xmlParser.traverse(new DOMSource(element));
@@ -159,6 +163,15 @@ public class NetconfMessageTransformer implements MessageTransformer<NetconfMess
             throw new IllegalArgumentException(String.format("Failed to parse notification %s", element), e);
         }
         return new NetconfDeviceNotification(content, stripped.getKey());
+    }
+
+    private NotificationDefinition getNotificationDefinition(Multimap<QName, NotificationDefinition> mappedNotifications, QName notificationNoRev) {
+        final Collection<NotificationDefinition> notificationDefinitions = mappedNotifications.get(notificationNoRev);
+        Preconditions.checkArgument(notificationDefinitions.size() > 0,
+                "Unable to parse notification %s, unknown notification. Available notifications: %s",
+                notificationDefinitions, mappedNotifications.keySet());
+
+        return getMostRecentNotification(notificationDefinitions);
     }
 
     private static NotificationDefinition getMostRecentNotification(
