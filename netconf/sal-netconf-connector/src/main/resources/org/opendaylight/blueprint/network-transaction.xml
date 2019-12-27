@@ -16,8 +16,8 @@
 							 update-strategy="none">
 		<cm:default-properties>
 			<cm:property name="queue-wait-timeout" value="300"/>
-			<cm:property name="transaction-creation-initial-rate-limit" value="100"/>
-			<cm:property name="task-congestion-watermark" value="100"/>
+			<cm:property name="transaction-creation-initial-rate-limit" value="300"/>
+			<cm:property name="task-congestion-watermark" value="180"/>
 			<cm:property name="rate-limit-step-size" value="25"/>
 			<cm:property name="task-postpone-time-min" value="1000"/>
 			<cm:property name="task-postpone-time-max" value="5000"/>
