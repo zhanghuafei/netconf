@@ -93,7 +93,7 @@ public class NetconfPagingServiceImpl implements NetconfPagingService {
         }
 
         String paraValue = createCountPara(moduleName, type, expressions);
-        FluentFuture<String> resultFuture = extCmdService.extCmdTo(nodeId, 1, "queryCnt", "execute", 10, 1, paraValue);
+        FluentFuture<String> resultFuture = extCmdService.extCmdTo(nodeId, 1L, "queryCnt", "execute", 10, 1, paraValue);
 
         return resultFuture.transform(result -> {
             if (result == null) {

@@ -31,7 +31,7 @@ public class ExtCmdServiceImpl implements ExtCmdService {
     }
 
     @Override
-    public FluentFuture<String> extCmdTo(String nodeId, Integer indexValue, String cmdNameValue, String operationValue, Integer timeoutValue, Integer syncValue, String paraValue) {
+    public FluentFuture<String> extCmdTo(String nodeId, Long indexValue, String cmdNameValue, String operationValue, Integer timeoutValue, Integer syncValue, String paraValue) {
         YangInstanceIdentifier nodeII = ExtCmdService.toYangNodeII(nodeId);
         Optional<DOMMountPoint> mountPointOpt = domMountService.getMountPoint(nodeII);
         if (!mountPointOpt.isPresent()) {
