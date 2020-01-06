@@ -22,6 +22,6 @@ public interface ExtCmdService {
                 .nodeWithKey(Node.QNAME, QName.create(Node.QNAME, "node-id"), nodeId).build();
     }
 
-    FluentFuture<String> extCmdTo(String nodeId, Integer indexValue, String cmdNameValue, String operationValue, Integer timeoutValue, Integer syncValue, String paraValue);
+    FluentFuture<String> extCmdTo(String nodeId, Long indexValue, String cmdNameValue, String operationValue, Integer timeoutValue, Integer syncValue, String paraValue);
 
 }

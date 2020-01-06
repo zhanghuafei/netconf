@@ -31,7 +31,7 @@ public class ExtCmdInputFactory {
         extCmdRpcName = QName.create(moduleQname, "extcmd");
     }
 
-    public AnyXmlNode createExtCmdInput(Integer indexValue, String cmdNameValue, String operationValue, Integer timeoutValue, Integer syncValue, String paraValue) {
+    public AnyXmlNode createExtCmdInput(Long indexValue, String cmdNameValue, String operationValue, Integer timeoutValue, Integer syncValue, String paraValue) {
         final NormalizedNodeAttrBuilder<YangInstanceIdentifier.NodeIdentifier, DOMSource, AnyXmlNode> anyXmlBuilder =
                 Builders.anyXmlBuilder().withNodeIdentifier(new YangInstanceIdentifier.NodeIdentifier(
                         QName.create(moduleQname, command.getLocalName()).intern()));
@@ -45,14 +45,14 @@ public class ExtCmdInputFactory {
         return anyXmlBuilder.build();
     }
 
-    private static Element createExtCmds(Document doc, Integer indexValue, String cmdNameValue, String operationValue, Integer timeoutValue, Integer syncValue, String paraValue) {
+    private static Element createExtCmds(Document doc, Long indexValue, String cmdNameValue, String operationValue, Integer timeoutValue, Integer syncValue, String paraValue) {
         Element extCmds = doc.createElement("ExtCmds");
         Element extCmd = createExtCmd(doc, indexValue, cmdNameValue, operationValue, timeoutValue, syncValue, paraValue);
         extCmds.appendChild(extCmd);
         return extCmds;
     }
 
-    private static Element createExtCmd(Document doc, Integer indexValue, String cmdNameValue, String operationValue, Integer timeoutValue, Integer syncValue, String paraValue) {
+    private static Element createExtCmd(Document doc, Long indexValue, String cmdNameValue, String operationValue, Integer timeoutValue, Integer syncValue, String paraValue) {
         Element extCmd = doc.createElement("ExtCmd");
 
         Element index = doc.createElement("Index");
