@@ -34,7 +34,9 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * Schedule the execution of across device transaction on the basis of contending for the device lock.
  * <p>
- * TODO: 1、参数配置化 2、 去除对于AbstractMXBean的依赖
+ * TODO: 去除对于AbstractMXBean的依赖
+ *
+ * @Author Huafei Zhang
  */
 public class TransactionScheduler implements AutoCloseable {
     private static final Logger LOG = LoggerFactory.getLogger(TransactionScheduler.class);
@@ -370,7 +372,7 @@ public class TransactionScheduler implements AutoCloseable {
             }
         }
 
-        double getRateLimit(){
+        double getRateLimit() {
             return txRateLimiter.getRate();
         }
     }

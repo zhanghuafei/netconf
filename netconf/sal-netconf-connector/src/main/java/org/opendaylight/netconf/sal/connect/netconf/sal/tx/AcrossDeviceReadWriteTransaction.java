@@ -16,9 +16,14 @@ import org.opendaylight.yangtools.yang.binding.InstanceIdentifier;
 import com.google.common.base.Optional;
 import com.google.common.util.concurrent.CheckedFuture;
 
+/**
+ * Across device read write transaction interface
+ *
+ * @author Zhang Huafei
+ */
 public interface AcrossDeviceReadWriteTransaction extends AcrossDeviceWriteTransaction {
     @SuppressWarnings("deprecation")
-	public <T extends DataObject> CheckedFuture<Optional<T>, ReadFailedException> read(
-        InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store, InstanceIdentifier<T> path);
+    public <T extends DataObject> CheckedFuture<Optional<T>, ReadFailedException> read(
+            InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store, InstanceIdentifier<T> path);
 
 }

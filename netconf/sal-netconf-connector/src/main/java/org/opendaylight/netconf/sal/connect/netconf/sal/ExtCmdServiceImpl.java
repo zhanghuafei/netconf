@@ -1,3 +1,11 @@
+/*
+ * Copyright (c) 2018 UTStarcom, Inc. and others. All rights reserved.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License v1.0 which accompanies this distribution,
+ * and is available at http://www.eclipse.org/legal/epl-v10.html
+ */
+
 package org.opendaylight.netconf.sal.connect.netconf.sal;
 
 import com.google.common.base.Optional;
@@ -23,6 +31,11 @@ import org.w3c.dom.Element;
 import javax.xml.transform.dom.DOMSource;
 import java.util.Set;
 
+/**
+ * Extcmd命令发送服务的实现
+ *
+ * @Author Huafei Zhang
+ */
 public class ExtCmdServiceImpl implements ExtCmdService {
     private DOMMountPointService domMountService;
 

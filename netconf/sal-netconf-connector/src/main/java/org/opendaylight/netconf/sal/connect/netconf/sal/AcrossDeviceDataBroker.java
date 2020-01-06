@@ -11,6 +11,11 @@ package org.opendaylight.netconf.sal.connect.netconf.sal;
 import org.opendaylight.netconf.sal.connect.netconf.sal.tx.AcrossDeviceReadWriteTransaction;
 import org.opendaylight.netconf.sal.connect.netconf.sal.tx.AcrossDeviceWriteTransaction;
 
+/**
+ * Across device dataBroker interface
+ *
+ * @author Zhang Huafei
+ */
 public interface AcrossDeviceDataBroker {
 
     AcrossDeviceWriteTransaction newWriteOnlyTransaction();

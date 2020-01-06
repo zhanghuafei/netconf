@@ -1,3 +1,4 @@
+
 package org.opendaylight.netconf.sal.connect.netconf.sal;
 
 import com.google.common.util.concurrent.FluentFuture;
@@ -8,6 +9,15 @@ import org.opendaylight.yang.gen.v1.urn.tbd.params.xml.ns.yang.network.topology.
 import org.opendaylight.yangtools.yang.common.QName;
 import org.opendaylight.yangtools.yang.data.api.YangInstanceIdentifier;
 
+/**
+ * Extcmd是网元定义的一种可扩展的通用命令，根据参数的不同，可以支持不同的功能。
+ * <p>
+ * 用于Extcmd命令的发送
+ * <p>
+ * NOTE: 因该实现依赖sal-netconf-connector较多的内部接口，为方便起见，功能实现安排在该位置
+ *
+ * @Author Huafei Zhang
+ */
 public interface ExtCmdService {
     String EXT_MODULE_NAME = "ExtCmd";
     String DEFAULT_TOPOLOGY_NAME = "topology-netconf";

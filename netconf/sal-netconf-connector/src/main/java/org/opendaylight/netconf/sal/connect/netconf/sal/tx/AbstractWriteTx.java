@@ -17,10 +17,12 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
+
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import javax.annotation.Nonnull;
+
 import org.eclipse.jdt.annotation.NonNull;
 import org.opendaylight.controller.md.sal.common.api.data.LogicalDatastoreType;
 import org.opendaylight.controller.md.sal.common.api.data.TransactionCommitFailedException;
@@ -44,7 +46,7 @@ import org.slf4j.LoggerFactory;
 
 public abstract class AbstractWriteTx implements DOMDataWriteTransaction {
 
-    private static final Logger LOG  = LoggerFactory.getLogger(AbstractWriteTx.class);
+    private static final Logger LOG = LoggerFactory.getLogger(AbstractWriteTx.class);
 
     protected final RemoteDeviceId id;
     protected final NetconfBaseOps netOps;
@@ -159,7 +161,7 @@ public abstract class AbstractWriteTx implements DOMDataWriteTransaction {
                 if (!result.isSuccessful()) {
                     final Collection<RpcError> errors = result.getErrors();
                     resultFuture.setException(new TransactionCommitFailedException(
-                        String.format("Commit of transaction %s failed", getIdentifier()),
+                            String.format("Commit of transaction %s failed", getIdentifier()),
                             errors.toArray(new RpcError[errors.size()])));
                     return;
                 }

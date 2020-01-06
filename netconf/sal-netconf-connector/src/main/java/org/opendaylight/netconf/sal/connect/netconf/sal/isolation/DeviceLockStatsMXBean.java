@@ -8,8 +8,11 @@
 
 package org.opendaylight.netconf.sal.connect.netconf.sal.isolation;
 
-import java.util.Set;
-
+/**
+ * 管理网元锁及事务信息的MXBean接口
+ *
+ * @Author Huafei Zhang
+ */
 public interface DeviceLockStatsMXBean {
 
     /**
