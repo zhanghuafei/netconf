@@ -275,7 +275,7 @@ public class NetconfMessageTransformer implements MessageTransformer<NetconfMess
 
     private boolean isRestconfReadConfig(StackTraceElement[] trace) {
         for(StackTraceElement e : trace) {
-            if(e.getClassName().contains("BrokerFacade") && !e.getMethodName().contains("BrokerFacade.invokeRpc")) {
+            if(e.getClassName().equals("org.opendaylight.netconf.sal.restconf.impl.BrokerFacade") && !e.getMethodName().equals("invokeRpc")) {
                 return true;
             }
         }
@@ -314,7 +314,7 @@ public class NetconfMessageTransformer implements MessageTransformer<NetconfMess
 
             SchemaContext tempContext = schemaContext;
 
-            // 非restconf read config数据
+            // 返回了UT的数据，但是非通过restconf的mount点直接访问访问配置树
             if (isUTResult(xmlData) && !isRestconfReadConfig(trace)) {
                 tempContext = gctx;
             }
