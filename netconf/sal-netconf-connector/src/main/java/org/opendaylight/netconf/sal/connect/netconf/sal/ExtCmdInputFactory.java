@@ -1,3 +1,10 @@
+/*
+ * Copyright (c) 2018 UTStarcom, Inc. and others. All rights reserved.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License v1.0 which accompanies this distribution,
+ * and is available at http://www.eclipse.org/legal/epl-v10.html
+ */
 package org.opendaylight.netconf.sal.connect.netconf.sal;
 
 import com.google.common.base.Preconditions;
@@ -20,6 +27,11 @@ import java.util.Map;
 
 import static org.opendaylight.netconf.sal.connect.netconf.sal.NetconfPagingService.*;
 
+/**
+ * 用于Extcmd命令的构建
+ *
+ * @Author Huafei Zhang
+ */
 public class ExtCmdInputFactory {
     public final QName moduleQname;
     public final QName command;

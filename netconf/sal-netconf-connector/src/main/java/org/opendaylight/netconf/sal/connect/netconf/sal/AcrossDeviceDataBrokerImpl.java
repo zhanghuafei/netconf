@@ -16,6 +16,11 @@ import org.opendaylight.netconf.sal.connect.netconf.sal.tx.AcrossDeviceWriteTran
 import org.opendaylight.netconf.sal.connect.netconf.sal.tx.BindingAcrossDeviceReadWriteTransaction;
 import org.opendaylight.netconf.sal.connect.netconf.sal.tx.BindingAcrossDeviceWriteTransaction;
 
+/**
+ * AcrossDeviceDataBroker implementation
+ *
+ * @author Zhang Huafei
+ */
 public class AcrossDeviceDataBrokerImpl implements AcrossDeviceDataBroker, AutoCloseable {
 
     private BindingNormalizedNodeSerializer codec;

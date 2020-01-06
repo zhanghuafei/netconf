@@ -32,13 +32,13 @@ import com.google.common.util.concurrent.SettableFuture;
 
 @SuppressWarnings("deprecation")
 public class BindingAcrossDeviceReadWriteTransaction extends BindingAcrossDeviceWriteTransaction implements
-    AcrossDeviceReadWriteTransaction {
+        AcrossDeviceReadWriteTransaction {
     private static final Logger LOG = LoggerFactory.getLogger(BindingAcrossDeviceReadWriteTransaction.class);
     private BindingNormalizedNodeSerializer codec;
     private DOMMountPointService mountService;
 
     public BindingAcrossDeviceReadWriteTransaction(BindingNormalizedNodeSerializer codec,
-        DOMMountPointService mountService, TransactionScheduler transScheduler) {
+                                                   DOMMountPointService mountService, TransactionScheduler transScheduler) {
         super(codec, mountService, transScheduler);
         this.codec = codec;
         this.mountService = mountService;
@@ -46,7 +46,7 @@ public class BindingAcrossDeviceReadWriteTransaction extends BindingAcrossDevice
 
     @Override
     public <T extends DataObject> CheckedFuture<Optional<T>, ReadFailedException> read(
-        InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store, InstanceIdentifier<T> path) {
+            InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store, InstanceIdentifier<T> path) {
         YangInstanceIdentifier yangMountPointPath = codec.toYangInstanceIdentifier(mountPointPath);
         Optional<DOMMountPoint> optionalMountPoint = mountService.getMountPoint(yangMountPointPath);
         if (!optionalMountPoint.isPresent()) {
@@ -63,8 +63,8 @@ public class BindingAcrossDeviceReadWriteTransaction extends BindingAcrossDevice
         YangInstanceIdentifier dataPath = codec.toYangInstanceIdentifier(path);
 
         return MappingCheckedFuture.create(
-            Futures.transform(tx.read(store, dataPath), new DeserializeFunction<T>(dataPath)),
-            ReadFailedException.MAPPER);
+                Futures.transform(tx.read(store, dataPath), new DeserializeFunction<T>(dataPath)),
+                ReadFailedException.MAPPER);
     }
 
 

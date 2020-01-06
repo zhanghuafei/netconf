@@ -392,13 +392,11 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
         mountPointPathToTx.values().forEach(tx -> ((WriteCandidateTx) tx).cleanup());
     }
 
-
     @Override
     public <T extends DataObject> void put(InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store,
                                            InstanceIdentifier<T> path, T data) {
         TxOperation<T> operation = new TxOperation(PUT, mountPointPath, store, path, data);
         operationQueue.offer(operation);
-
     }
 
     @Override
@@ -478,8 +476,6 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
                     ", target=" + target +
                     '}';
         }
-
-
     }
 
     enum TxOperationType {
