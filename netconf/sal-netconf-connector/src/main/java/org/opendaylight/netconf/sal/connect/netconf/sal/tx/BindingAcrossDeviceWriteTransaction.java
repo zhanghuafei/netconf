@@ -410,7 +410,7 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
     @Override
     public <T extends DataObject> void merge(InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store,
                                              InstanceIdentifier<T> path, T data) {
-        TxOperation<T> operation = new TxOperation(MERGE, mountPointPath, store, path);
+        TxOperation<T> operation = new TxOperation(MERGE, mountPointPath, store, path, data);
         operationQueue.offer(operation);
     }
 
@@ -428,7 +428,7 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
 
         public TxOperation(TxOperationType operationType, InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store, InstanceIdentifier<T> path) {
             if (operationType != DELETE) {
-                throw new IllegalArgumentException("Unexpected operation type" + operationType);
+                throw new IllegalArgumentException("Unexpected operation type " + operationType);
             }
             this.operationType = operationType;
             this.mountPointPath = mountPointPath;
