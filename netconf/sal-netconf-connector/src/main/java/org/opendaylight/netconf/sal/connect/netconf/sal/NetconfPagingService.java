@@ -25,7 +25,7 @@ import javax.annotation.Nullable;
 public interface NetconfPagingService {
 
     // 常量特定于yang的生成规则
-    static final String NAMESPACE_PREFIX = "urn.utstar:uar:";
+    static final String UT_NAMESPACE_PART = "urn.utstar:uar:";
     static final String REVISION_DATE = "2017-11-02";
     static final String TOP_CONTAINER_SUFFIX = "s";
 
@@ -35,7 +35,7 @@ public interface NetconfPagingService {
     }
 
     static QName topoContainerQname(String moduleName) {
-        QName moduleQname = QName.create(NAMESPACE_PREFIX + moduleName, REVISION_DATE, moduleName).intern();
+        QName moduleQname = QName.create(UT_NAMESPACE_PART + moduleName, REVISION_DATE, moduleName).intern();
         QName topContainer = QName.create(moduleQname, topContainerName(moduleName));
         return topContainer;
     }
@@ -45,7 +45,7 @@ public interface NetconfPagingService {
     }
 
     static String namespace(String moduleName) {
-        return NAMESPACE_PREFIX + moduleName;
+        return UT_NAMESPACE_PART + moduleName;
     }
 
     /**
