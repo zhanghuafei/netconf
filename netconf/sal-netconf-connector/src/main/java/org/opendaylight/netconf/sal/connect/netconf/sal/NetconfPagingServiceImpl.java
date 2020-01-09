@@ -17,6 +17,7 @@ import com.google.common.util.concurrent.FluentFuture;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
+import org.apache.commons.lang3.StringUtils;
 import org.opendaylight.mdsal.binding.dom.codec.api.BindingNormalizedNodeSerializer;
 import org.opendaylight.mdsal.dom.api.DOMMountPoint;
 import org.opendaylight.mdsal.dom.api.DOMMountPointService;
@@ -48,6 +49,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import static org.opendaylight.netconf.sal.connect.netconf.sal.QueryParaUtil.CONDITION_REGEX;
+import static org.opendaylight.netconf.sal.connect.netconf.sal.XPathUtil.NAMESPACE_PREFIX;
+import static org.opendaylight.netconf.sal.connect.netconf.sal.XPathUtil.toXpathExp;
 import static org.opendaylight.netconf.sal.connect.netconf.util.NetconfMessageTransformUtil.*;
 
 /**
@@ -62,11 +66,8 @@ public class NetconfPagingServiceImpl implements NetconfPagingService {
     final private BindingNormalizedNodeSerializer codec;
     private ExtCmdService extCmdService;
 
-    private static final String CONDITION_REGEX = "(\\w+)(>=|<=|<|=|>){1}(.*)";
-
     private static final String XPATH = "xpath";
     private static final QName NETCONF_SELECT_QNAME = QName.create(NETCONF_QNAME, "select").intern();
-    private static final String NAMESPACE_PREFIX = "t";
 
     public NetconfPagingServiceImpl(BindingNormalizedNodeSerializer codec, DOMMountPointService domMountService, ExtCmdService extCmdService) {
         this.codec = codec;
@@ -92,7 +93,7 @@ public class NetconfPagingServiceImpl implements NetconfPagingService {
             return future;
         }
 
-        String paraValue = createCountPara(moduleName, type, expressions);
+        String paraValue = QueryParaUtil.createCountPara(moduleName, type, expressions);
         FluentFuture<String> resultFuture = extCmdService.extCmdTo(nodeId, 1L, "queryCnt", "execute", 10, 1, paraValue);
 
         return resultFuture.transform(result -> {
@@ -103,32 +104,13 @@ public class NetconfPagingServiceImpl implements NetconfPagingService {
         }, MoreExecutors.directExecutor());
     }
 
-    private String createCountPara(String moduleName, TableType type, @Nullable String[] expressions) {
-
-        String paraValue = String.format("{\"DsName\",{String,\"%s\"}},{\"TblName\",{String,\"%s\"}}", type.toString(), moduleName);
-        if (expressions != null && expressions.length > 0) {
-            //{"filter",{String,"Almid>100 and Almid<500"}
-            StringBuilder targetExp = new StringBuilder();
-            targetExp.append(expressions[0]);
-            if (expressions.length > 1) {
-                for (int i = 1; i < expressions.length; i++) {
-                    targetExp.append(" and ");
-                    targetExp.append(expressions[i]);
-                }
-            }
-            paraValue = paraValue + String.format("{\"filter\",{String,\"%s\"}", targetExp.toString());
-        }
-
-        return "{" + paraValue + "}";
-    }
-
     @Override
     public <T extends DataObject> FluentFuture<Optional<T>> query(String nodeId, final String moduleName,
                                                                   @Nullable Integer start, @Nullable Integer num, @Nullable String... expressions) {
         YangInstanceIdentifier yangII = NetconfPagingService.toTableYangII(moduleName);
         return find(nodeId, moduleName, start, num, expressions).transform(resutOpt -> {
             if (!resutOpt.isPresent()) {
-                return Optional.<T>absent();
+                return Optional.absent();
             }
             return Optional.of((T) codec.fromNormalizedNode(yangII, resutOpt.get()).getValue());
         }, MoreExecutors.directExecutor());
@@ -184,7 +166,6 @@ public class NetconfPagingServiceImpl implements NetconfPagingService {
         }
     }
 
-
     private <T extends DataObject> NormalizedNodeAttrBuilder<YangInstanceIdentifier.NodeIdentifier, DOMSource, AnyXmlNode> toFitlerStructure(
             String moduleName, Integer start, Integer num, String... expressions) {
         final NormalizedNodeAttrBuilder<YangInstanceIdentifier.NodeIdentifier, DOMSource, AnyXmlNode> anyXmlBuilder =
@@ -205,44 +186,4 @@ public class NetconfPagingServiceImpl implements NetconfPagingService {
         return anyXmlBuilder;
     }
 
-    private String toXpathExp(String topContainerName, Integer start, Integer num, String... expressions) {
-
-        String prefixSlash = "/" + NAMESPACE_PREFIX + ":";
-        String listName = topContainerName.substring(0, topContainerName.length() - 1);
-        String startPath = prefixSlash + topContainerName + prefixSlash + listName;
-
-        StringBuilder stringBuilder = new StringBuilder(startPath);
-        if (expressions != null) {
-            for (String expression : expressions) {
-                String fexp = String.format("[%s]", quoteExp(expression));
-                stringBuilder.append(fexp);
-            }
-        }
-
-        String limit = toLimit(start, num);
-        if (limit != null) {
-            stringBuilder.append(limit);
-        }
-        return stringBuilder.toString();
-    }
-
-    private String quoteExp(String expression) {
-        Pattern pattern = Pattern.compile(CONDITION_REGEX);
-        Matcher matcher = pattern.matcher(expression);
-        if (matcher.matches()) {
-            String key = matcher.group(1);
-            String operator = matcher.group(2);
-            String value = matcher.group(3);
-            return key + operator + "'" + value + "'";
-        }
-        throw new IllegalArgumentException();
-    }
-
-    private String toLimit(Integer start, Integer num) {
-        if (start == null || num == null) {
-            return null;
-        }
-        String limit = String.format("[LIMIT()-%s+%s]", start, num);
-        return limit;
-    }
 }
