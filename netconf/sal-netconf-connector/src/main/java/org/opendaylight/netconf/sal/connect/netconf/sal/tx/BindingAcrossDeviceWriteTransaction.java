@@ -263,6 +263,10 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
 
             @Override
             public void onFailure(Throwable t) {
+                if(t instanceof AcrossDeviceTransPartialUnheathyException) {
+                    cleanupOnSuccess();
+                    return;
+                }
                 cleanup();
             }
 

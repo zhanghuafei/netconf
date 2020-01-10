@@ -143,6 +143,7 @@ public class TransactionScheduler implements AutoCloseable {
 
     /**
      * 检查相关网元是否可以申请锁
+     *
      */
     private boolean isConflict(Set<?> lockClaimed) {
         return !Sets.intersection(deviceLocks, lockClaimed).isEmpty();
@@ -171,6 +172,12 @@ public class TransactionScheduler implements AutoCloseable {
 
     }
 
+    /**
+     * WARN
+     * 该类的hashcode和equal涉及的字段范围不一样，若配合HashMap使用可能产生问题：
+     * hashcode碰撞，使用equals判断。 而equals仅依赖expectExecuteTime
+     * hashcode实际上在这里未使用到，仅是为了应付findbug的报告。
+     */
     private class DelayTask implements Delayed {
 
         // 推迟次数
@@ -224,6 +231,22 @@ public class TransactionScheduler implements AutoCloseable {
             return Long.compare(this.expectExecuteTime, anotherTask.expectExecuteTime);
         }
 
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            DelayTask delayTask = (DelayTask) o;
+
+            if(this.compareTo(delayTask) == 0) {
+                return true;
+            }
+            return false;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(postPoneTimes, wtx, future, expectExecuteTime, lockClaimed, createTime);
+        }
 
         public void execute() {
             long waitTime = waitTime();
