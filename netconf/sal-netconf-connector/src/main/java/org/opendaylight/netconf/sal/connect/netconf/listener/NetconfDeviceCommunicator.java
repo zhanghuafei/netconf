@@ -49,6 +49,7 @@ public class NetconfDeviceCommunicator
         implements NetconfClientSessionListener, RemoteDeviceCommunicator<NetconfMessage> {
 
     private static final Logger LOG = LoggerFactory.getLogger(NetconfDeviceCommunicator.class);
+    private static final Logger NOTI_LOG = LoggerFactory.getLogger("netconf-notification");
 
     protected final RemoteDevice<NetconfSessionPreferences, NetconfMessage, NetconfDeviceCommunicator> remoteDevice;
     private final Optional<UserPreferences> overrideNetconfCapabilities;
@@ -396,8 +397,8 @@ public class NetconfDeviceCommunicator
     }
 
     private void processNotification(final NetconfMessage notification) {
-        if (LOG.isTraceEnabled()) {
-            LOG.trace("{}: Notification received: {}", id, notification);
+        if (NOTI_LOG.isTraceEnabled()) {
+            NOTI_LOG.trace("{}: Notification received: {}", id, notification);
         }
 
         remoteDevice.onNotification(notification);

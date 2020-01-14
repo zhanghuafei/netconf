@@ -85,6 +85,7 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
         this.mountService = mountService;
         this.lockPool = transScheduler;
         transactionId = transactionCounter.incrementAndGet();
+        LOG.debug("transaction {{}}: new created.", transactionId);
     }
 
     public List<TxOperation> getOperations() {
@@ -169,7 +170,7 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
                 LOG.debug("transaction {{}}: handling commit response from device {}", transactionId, id);
                 if (localCount == size) {
                     if (isSuccessful) {
-                        LOG.debug("transaction {{}}: commit phase is sucessfully", transactionId);
+                        LOG.debug("transaction {{}}: commit phase is successful", transactionId);
                         actxResult.set(RpcResultBuilder.<Void>success().build());
                     } else {
                         String message = String.format("{%s}: commit phase failed for device return error or network " +
@@ -296,7 +297,7 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
         Futures.addCallback(Futures.allAsList(txResults), new FutureCallback<List<RpcResult<Void>>>() {
             @Override
             public void onSuccess(final List<RpcResult<Void>> txResults) {
-                LOG.debug("transaction {{}}: vote sucessfully.", transactionId);
+                LOG.debug("transaction {{}}: vote phase is successful.", transactionId);
 
                 if (!transformed.isDone()) {
                     transformed.set(RpcResultBuilder.<Void>success().build());
@@ -320,9 +321,11 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
         }
 
         if (operationQueue.isEmpty()) {
+            LOG.debug("transaction {{}}: operation queue is empty, immediately return success.", transactionId);
             return CommitInfo.emptyFluentFuture();
         }
 
+        LOG.debug("transaction {{}}: committed", transactionId);
         return lockPool.submit(this);
     }
 
