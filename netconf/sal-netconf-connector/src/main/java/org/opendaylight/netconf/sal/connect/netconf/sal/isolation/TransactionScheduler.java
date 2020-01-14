@@ -259,21 +259,22 @@ public class TransactionScheduler implements AutoCloseable {
             }
 
             if (tryAcquire(lockClaimed)) {
-                LOG.debug("transaction {{}}: acquire device lock sucessfully", wtx.getTransactionId());
+                LOG.debug("transaction {{}}: acquire device lock {} successfully", wtx.getTransactionId(), lockClaimed);
                 // 执行事务
+                // 考虑再分配到新的线程池执行以降低concurrent-rpc-limit引发阻塞造成的影响？
                 wtx.execute().addCallback(new FutureCallback<CommitInfo>() {
                     @Override
                     public void onSuccess(@NullableDecl CommitInfo result) {
                         future.set(result);
                         release(lockClaimed);
-                        LOG.debug("transaction {{}}: release device lock successfully.", wtx.getTransactionId());
+                        LOG.debug("transaction {{}}: successful and release device lock.", wtx.getTransactionId());
                     }
 
                     @Override
                     public void onFailure(Throwable t) {
                         future.setException(t);
                         release(lockClaimed);
-                        LOG.error("transaction {{}}: release device lock successfully.", wtx.getTransactionId());
+                        LOG.error("transaction {{}}: failed and release device lock.", wtx.getTransactionId(), t);
                     }
                 }, taskCallbackExecutor);
                 return;
