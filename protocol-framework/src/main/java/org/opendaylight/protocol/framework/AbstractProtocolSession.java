@@ -42,6 +42,7 @@ public abstract class AbstractProtocolSession<M> extends SimpleChannelInboundHan
             // Forward channel inactive event, all handlers in pipeline might be interested in the event e.g. close channel handler of reconnect promise
             super.channelInactive(ctx);
         } catch (final Exception e) {
+            LOG.debug("Failed to delegate channel inactive event on channel {}.", ctx.channel());
             throw new RuntimeException("Failed to delegate channel inactive event on channel " + ctx.channel(), e);
         }
     }

@@ -75,9 +75,9 @@ final class NotificationHandler {
         Preconditions.checkState(!passNotifications);
 
         LOG.debug("{}: Caching notification {}, remote schema not yet fully built", id, notification);
-        if (LOG.isTraceEnabled()) {
-            LOG.trace("{}: Caching notification {}", id, XmlUtil.toString(notification.getDocument()));
-        }
+//        if (LOG.isTraceEnabled()) {
+//            LOG.trace("{}: Caching notification {}", id, XmlUtil.toString(notification.getDocument()));
+//        }
 
         queue.add(notification);
     }
