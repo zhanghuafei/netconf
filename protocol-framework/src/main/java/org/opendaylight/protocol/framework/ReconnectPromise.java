@@ -94,6 +94,7 @@ final class ReconnectPromise<S extends ProtocolSession<?>, L extends SessionList
         public void channelInactive(final ChannelHandlerContext ctx) {
             // This is the ultimate channel inactive handler, not forwarding
             if (promise.isCancelled()) {
+                LOG.debug("Connection to {} was canceled", promise.address);
                 return;
             }
 
