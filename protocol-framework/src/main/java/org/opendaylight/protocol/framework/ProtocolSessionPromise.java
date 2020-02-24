@@ -119,6 +119,10 @@ final class ProtocolSessionPromise<S extends ProtocolSession<?>> extends Default
                     return;
                 }
 
+                if(isDone()) {
+                    return;
+                }
+
                 LOG.debug("Attempt to connect to {} failed", ProtocolSessionPromise.this.address, cf.cause());
 
                 final Future<Void> rf = ProtocolSessionPromise.this.strategy.scheduleReconnect(cf.cause());
