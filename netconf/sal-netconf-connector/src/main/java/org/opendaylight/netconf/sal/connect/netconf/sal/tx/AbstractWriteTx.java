@@ -232,7 +232,7 @@ public abstract class AbstractWriteTx implements DOMDataWriteTransaction {
             public void onFailure(final Throwable throwable) {
                 final NetconfDocumentedException exception =
                         new NetconfDocumentedException(
-                                id + ":RPC during tx returned an exception",
+                                id + ": RPC during tx returned an exception",
                                 new Exception(throwable),
                                 DocumentedException.ErrorType.APPLICATION,
                                 DocumentedException.ErrorTag.OPERATION_FAILED,
@@ -283,9 +283,9 @@ public abstract class AbstractWriteTx implements DOMDataWriteTransaction {
                 }
                 final String message;
                 if (error.getMessage() == null || error.getMessage().isEmpty()) {
-                    message = id + ":RPC during tx failed";
+                    message = id + ": RPC during tx failed";
                 } else {
-                    message = error.getMessage();
+                    message = id + ": " + error.getMessage();
                 }
                 final NetconfDocumentedException exception = new NetconfDocumentedException(message,
                         eType,
