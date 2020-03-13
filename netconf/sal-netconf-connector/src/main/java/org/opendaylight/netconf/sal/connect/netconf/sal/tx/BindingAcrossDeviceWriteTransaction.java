@@ -348,20 +348,15 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
                 }
                 switch (op.getOperationType()) {
                     case PUT: {
-                        final Entry<YangInstanceIdentifier, NormalizedNode<?, ?>> normalized =
-                                codec.toNormalizedNode(op.getPath(), op.getData());
-                        tx.put(op.getStore(), normalized.getKey(), normalized.getValue());
+                        tx.put(op.getStore(), op.getPath(), op.getData());
                         break;
                     }
                     case MERGE: {
-                        final Entry<YangInstanceIdentifier, NormalizedNode<?, ?>> normalized =
-                                codec.toNormalizedNode(op.getPath(), op.getData());
-                        tx.merge(op.getStore(), normalized.getKey(), normalized.getValue());
+                        tx.merge(op.getStore(), op.getPath(), op.getData());
                         break;
                     }
                     case DELETE: {
-                        YangInstanceIdentifier dataPath = codec.toYangInstanceIdentifier(op.getPath());
-                        tx.delete(op.getStore(), dataPath);
+                        tx.delete(op.getStore(), op.getPath());
                         break;
                     }
                 }
@@ -402,14 +397,29 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
     @Override
     public <T extends DataObject> void put(InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store,
                                            InstanceIdentifier<T> path, T data) {
-        TxOperation<T> operation = new TxOperation(PUT, mountPointPath, store, path, data);
+        final Entry<YangInstanceIdentifier, NormalizedNode<?, ?>> normalized =
+                codec.toNormalizedNode(path, data);
+        YangInstanceIdentifier dataPath = normalized.getKey();
+        NormalizedNode<?, ?> normalizedNode = normalized.getValue();
+        put(mountPointPath, store, dataPath, normalizedNode);
+    }
+
+    @Override
+    public void put(InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store, YangInstanceIdentifier dataPath, NormalizedNode<?, ?> normalizedNode) {
+        TxOperation operation = new TxOperation(PUT, mountPointPath, store, dataPath, normalizedNode);
         operationQueue.offer(operation);
     }
 
     @Override
     public <T extends DataObject> void delete(InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store,
                                               InstanceIdentifier<T> path) {
-        TxOperation<T> operation = new TxOperation(DELETE, mountPointPath, store, path);
+        YangInstanceIdentifier dataPath = codec.toYangInstanceIdentifier(path);
+        delete(mountPointPath, store, dataPath);
+    }
+
+    @Override
+    public void delete(InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store, YangInstanceIdentifier dataPath) {
+        TxOperation operation = new TxOperation(DELETE, mountPointPath, store, dataPath);
         operationQueue.offer(operation);
     }
 
@@ -417,7 +427,16 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
     @Override
     public <T extends DataObject> void merge(InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store,
                                              InstanceIdentifier<T> path, T data) {
-        TxOperation<T> operation = new TxOperation(MERGE, mountPointPath, store, path, data);
+        final Entry<YangInstanceIdentifier, NormalizedNode<?, ?>> normalized =
+                codec.toNormalizedNode(path, data);
+        YangInstanceIdentifier dataPath = normalized.getKey();
+        NormalizedNode<?, ?> normalizedNode = normalized.getValue();
+        merge(mountPointPath, store, dataPath, normalizedNode);
+    }
+
+    @Override
+    public void merge(InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store, YangInstanceIdentifier dataPath, NormalizedNode<?, ?> normalizedNode) {
+        TxOperation operation = new TxOperation(MERGE, mountPointPath, store, dataPath, normalizedNode);
         operationQueue.offer(operation);
     }
 
@@ -426,14 +445,16 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
         return true;
     }
 
-    public class TxOperation<T extends DataObject> {
+    public class TxOperation {
         private TxOperationType operationType;
         private InstanceIdentifier<?> mountPointPath;
         private LogicalDatastoreType store;
-        private InstanceIdentifier<T> path;
-        private T data;
+        private YangInstanceIdentifier path;
+        private NormalizedNode<?, ?> data;
 
-        public TxOperation(TxOperationType operationType, InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store, InstanceIdentifier<T> path) {
+        // YangInstanceIdentifier path, NormalizedNode<?, ?> data
+
+        public TxOperation(TxOperationType operationType, InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store, YangInstanceIdentifier path) {
             if (operationType != DELETE) {
                 throw new IllegalArgumentException("Unexpected operation type " + operationType);
             }
@@ -443,7 +464,7 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
             this.path = path;
         }
 
-        public TxOperation(TxOperationType operationType, InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store, InstanceIdentifier<T> path, T data) {
+        public TxOperation(TxOperationType operationType, InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store, YangInstanceIdentifier path, NormalizedNode<?, ?> data) {
             this.operationType = operationType;
             this.mountPointPath = mountPointPath;
             this.store = store;
@@ -463,18 +484,18 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
             return store;
         }
 
-        public InstanceIdentifier<T> getPath() {
+        public YangInstanceIdentifier getPath() {
             return path;
         }
 
-        public T getData() {
+        public NormalizedNode<?, ?> getData() {
             return data;
         }
 
         @Override
         public String toString() {
             String nodeId = toNodeId(mountPointPath);
-            String target = path.getTargetType().getSimpleName();
+            String target = path.getLastPathArgument().getNodeType().getLocalName();
 
             return "TxOperation{" +
                     "operationType=" + operationType +

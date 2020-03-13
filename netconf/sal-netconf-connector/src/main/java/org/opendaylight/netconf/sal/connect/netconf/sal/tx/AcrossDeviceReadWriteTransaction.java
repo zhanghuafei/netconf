@@ -15,6 +15,8 @@ import org.opendaylight.yangtools.yang.binding.InstanceIdentifier;
 
 import com.google.common.base.Optional;
 import com.google.common.util.concurrent.CheckedFuture;
+import org.opendaylight.yangtools.yang.data.api.YangInstanceIdentifier;
+import org.opendaylight.yangtools.yang.data.api.schema.NormalizedNode;
 
 /**
  * Across device read write transaction interface
@@ -26,4 +28,6 @@ public interface AcrossDeviceReadWriteTransaction extends AcrossDeviceWriteTrans
     public <T extends DataObject> CheckedFuture<Optional<T>, ReadFailedException> read(
             InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store, InstanceIdentifier<T> path);
 
+    public CheckedFuture<Optional<NormalizedNode<?,?>>, ReadFailedException> read(
+            InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store, YangInstanceIdentifier dataPath);
 }

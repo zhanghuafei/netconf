@@ -22,6 +22,8 @@ import org.opendaylight.yangtools.yang.binding.InstanceIdentifier;
 import com.google.common.util.concurrent.CheckedFuture;
 import com.google.common.util.concurrent.FluentFuture;
 import com.google.common.util.concurrent.MoreExecutors;
+import org.opendaylight.yangtools.yang.data.api.YangInstanceIdentifier;
+import org.opendaylight.yangtools.yang.data.api.schema.NormalizedNode;
 
 /**
  * Across device write transaction interface
@@ -30,6 +32,7 @@ import com.google.common.util.concurrent.MoreExecutors;
  */
 @SuppressWarnings("deprecation")
 public interface AcrossDeviceWriteTransaction extends AutoCloseable {
+
     public <T extends DataObject> void put(InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store,
                                            InstanceIdentifier<T> path, T data);
 
@@ -57,6 +60,13 @@ public interface AcrossDeviceWriteTransaction extends AutoCloseable {
      * @return {@code false} if the task could not be cancelled, typically because it has already completed normally;
      * {@code true} otherwise
      */
+    @Deprecated
     public boolean cancel();
+
+    public void put(InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store, YangInstanceIdentifier dataPath, NormalizedNode<?, ?> normalizedNode);
+
+    public void delete(InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store, YangInstanceIdentifier dataPath);
+
+    public void merge(InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store, YangInstanceIdentifier dataPath, NormalizedNode<?, ?> normalizedNode);
 
 }

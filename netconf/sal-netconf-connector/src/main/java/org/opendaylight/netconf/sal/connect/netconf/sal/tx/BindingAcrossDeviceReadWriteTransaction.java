@@ -49,9 +49,8 @@ public class BindingAcrossDeviceReadWriteTransaction extends BindingAcrossDevice
     @Override
     public <T extends DataObject> CheckedFuture<Optional<T>, ReadFailedException> read(
             InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store, InstanceIdentifier<T> path) {
-        YangInstanceIdentifier yangMountPointPath = codec.toYangInstanceIdentifier(mountPointPath);
-        Optional<DOMMountPoint> optionalMountPoint = mountService.getMountPoint(yangMountPointPath);
         String nodeId = toNodeId(mountPointPath);
+        YangInstanceIdentifier dataPath = codec.toYangInstanceIdentifier(path);
         ExceptionMapper mapper = new ExceptionMapper<ReadFailedException>("read", ReadFailedException.class) {
             @Override
             protected ReadFailedException newWithCause(String message, Throwable cause) {
@@ -59,8 +58,26 @@ public class BindingAcrossDeviceReadWriteTransaction extends BindingAcrossDevice
             }
         };
 
+        CheckedFuture<Optional<NormalizedNode<?,?>>, ReadFailedException> readfuture = read(mountPointPath, store, dataPath);
+
+        return MappingCheckedFuture.create(
+                Futures.transform(readfuture, new DeserializeFunction<T>(dataPath)), mapper);
+    }
+
+    @Override
+    public CheckedFuture<Optional<NormalizedNode<?,?>>, ReadFailedException> read(
+            InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store, YangInstanceIdentifier dataPath) {
+        YangInstanceIdentifier yangMountPointPath = codec.toYangInstanceIdentifier(mountPointPath);
+        String nodeId = toNodeId(mountPointPath);
+        ExceptionMapper mapper = new ExceptionMapper<ReadFailedException>("read", ReadFailedException.class) {
+            @Override
+            protected ReadFailedException newWithCause(String message, Throwable cause) {
+                return new ReadFailedException("ne-id=" + nodeId + ": " + message, cause);
+            }
+        };
+        Optional<DOMMountPoint> optionalMountPoint = mountService.getMountPoint(yangMountPointPath);
         if (!optionalMountPoint.isPresent()) {
-            SettableFuture<Optional<T>> future = SettableFuture.create();
+            SettableFuture<Optional<NormalizedNode<?,?>>> future = SettableFuture.create();
             String message = "Mount point not exist: " + nodeId;
             LOG.error(message);
             future.setException(new IllegalStateException(message));
@@ -70,16 +87,12 @@ public class BindingAcrossDeviceReadWriteTransaction extends BindingAcrossDevice
         // I think omitting optional check is ok.
         DOMDataBroker db = mountPoint.getService(DOMDataBroker.class).get();
         DOMDataReadOnlyTransaction tx = db.newReadOnlyTransaction();
-        YangInstanceIdentifier dataPath = codec.toYangInstanceIdentifier(path);
-
-        return MappingCheckedFuture.create(
-                Futures.transform(tx.read(store, dataPath), new DeserializeFunction<T>(dataPath)), mapper);
+        return tx.read(store, dataPath);
     }
 
     private String toNodeId(InstanceIdentifier<?> mountPointPath) {
         return mountPointPath.firstKeyOf(Node.class).getNodeId().getValue();
     }
-
 
     /**
      * Convert normalize node to binding data object.
