@@ -170,8 +170,7 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
                         LOG.debug("transaction {{}}: commit phase is successful", transactionId);
                         actxResult.set(RpcResultBuilder.<Void>success().build());
                     } else {
-                        String message = String.format("{%s}: commit phase failed for device return error or network " +
-                                "error.", transactionId);
+                        String message = String.format("transaction{%s}: commit phase failed for device return error or network error.", transactionId);
                         // WARN: with last exception.
                         AcrossDeviceTransPartialUnheathyException finalException =
                                 new AcrossDeviceTransPartialUnheathyException(message, exception);
@@ -227,22 +226,11 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
 
             @Override
             public void onFailure(Throwable t) { // tx fail
-                String message = "{" + transactionId + "} " + "vote phase failed for 'edit-config' or 'validate' " +
-                        "returned exception.";
-                message = atachDeviceIdIfPresent(t, message);
+                String message = "transaction{" + transactionId + "}: vote phase failed for 'edit-config' or 'validate' returned exception.";
                 AcrossDeviceTransCommitFailedException finalException = new AcrossDeviceTransCommitFailedException(message, t);
-                finalException.setDetailedErrorMessages(toIdMessages(message));
+                finalException.setDetailedErrorMessages(toIdMessages(t.getMessage()));
                 LOG.warn("", finalException);
                 actxResult.setException(finalException);
-            }
-
-            private String atachDeviceIdIfPresent(Throwable t, String message) {
-                Pattern pattern = Pattern.compile("RemoteDevice\\{.*\\}");
-                Matcher matcher = pattern.matcher(t.getMessage());
-                if (matcher.find()) {
-                    message = matcher.group(0) + ":" + message;
-                }
-                return message;
             }
 
         }, MoreExecutors.directExecutor());
@@ -351,7 +339,7 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
                     case PUT: {
                         tx.put(op.getStore(), op.getPath(), op.getData());
                         break;
-                    }f
+                    }
                     case MERGE: {
                         tx.merge(op.getStore(), op.getPath(), op.getData());
                         break;
@@ -381,7 +369,7 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
             return FluentFuture.from(resultFuture);
 
         } catch (Exception e) {
-            LOG.error(e.getMessage(), e);
+            LOG.error("Unexpected exception", e);
             resultFuture.setException(e);
             return FluentFuture.from(resultFuture);
         }
@@ -391,7 +379,7 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
         Map<String, String> map = new HashMap<>();
         missingMountPointPaths.forEach(ii -> {
             String nodeId = toNodeId(ii);
-            map.put(nodeId, "disconnected during create related tx");
+            map.put(nodeId, "mount point missing");
         });
         return map;
     }
