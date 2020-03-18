@@ -90,10 +90,6 @@ public class BindingAcrossDeviceReadWriteTransaction extends BindingAcrossDevice
         return tx.read(store, dataPath);
     }
 
-    private String toNodeId(InstanceIdentifier<?> mountPointPath) {
-        return mountPointPath.firstKeyOf(Node.class).getNodeId().getValue();
-    }
-
     /**
      * Convert normalize node to binding data object.
      */

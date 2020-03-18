@@ -37,11 +37,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.ThreadSafe;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.Map.Entry;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -342,15 +339,19 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
                 if (isAnyMountPointMissing()) {
                     // discard all changes
                     cleanup();
+                    AcrossDeviceTransCommitFailedException finalException = new AcrossDeviceTransCommitFailedException(missingMountPointPaths.size() + " node disconnected");
+                    Map<String, String> detailMsg = toDetailMessage(missingMountPointPaths);
+                    finalException.setDetailedErrorMessages(detailMsg);
                     resultFuture
-                            .setException(new IllegalStateException(missingMountPointPaths.size() + " mount point missing"));
+                            .setException(finalException);
+                    LOG.error("transaction {{}}: failed due to node disconnected during create sub-transaction", transactionId, finalException);
                     return FluentFuture.from(resultFuture);
                 }
                 switch (op.getOperationType()) {
                     case PUT: {
                         tx.put(op.getStore(), op.getPath(), op.getData());
                         break;
-                    }
+                    }f
                     case MERGE: {
                         tx.merge(op.getStore(), op.getPath(), op.getData());
                         break;
@@ -384,6 +385,15 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
             resultFuture.setException(e);
             return FluentFuture.from(resultFuture);
         }
+    }
+
+    private Map<String, String> toDetailMessage(Set<InstanceIdentifier<?>> missingMountPointPaths) {
+        Map<String, String> map = new HashMap<>();
+        missingMountPointPaths.forEach(ii -> {
+            String nodeId = toNodeId(ii);
+            map.put(nodeId, "disconnected during create related tx");
+        });
+        return map;
     }
 
     private void cleanupOnSuccess() {
@@ -512,7 +522,7 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
         PUT
     }
 
-    private String toNodeId(InstanceIdentifier<?> mountPointPath) {
+    public String toNodeId(InstanceIdentifier<?> mountPointPath) {
         return mountPointPath.firstKeyOf(Node.class).getNodeId().getValue();
     }
 
