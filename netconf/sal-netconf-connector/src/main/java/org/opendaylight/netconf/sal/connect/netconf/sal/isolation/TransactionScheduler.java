@@ -113,9 +113,10 @@ public class TransactionScheduler implements AutoCloseable {
             LOG.debug("transaction {{}}: included operations is {}", wtx.getTransactionId(), wtx.getOperations());
         }
 
+        // 于限制到达率
         // WARN: 获取不到许可时，根据当前许可分配速度来计算沉睡时间
         // 调整速度后，加速的许可分配速度不对已沉睡的线程有影响。
-        // 所以rate低的情况下，可能导致大量的线程沉睡很长的时间。
+        // 所以rate低的情况下，可能导致大量的线程沉睡很长的时间
         rateLimit.acquire();
 
         Timer.Context context = timer.time();

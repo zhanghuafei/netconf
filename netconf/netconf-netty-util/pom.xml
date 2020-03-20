@@ -84,4 +84,11 @@
     </dependency>
   </dependencies>
 
+  <distributionManagement>
+    <repository>
+      <id>ut-customized-repository</id>
+      <url>http://172.18.10.215:8081/nexus/content/repositories/ut-customized-repository</url>
+    </repository>
+  </distributionManagement>
+
 </project>

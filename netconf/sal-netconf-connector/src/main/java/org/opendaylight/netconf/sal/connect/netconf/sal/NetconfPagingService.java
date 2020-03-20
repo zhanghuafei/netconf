@@ -81,7 +81,7 @@ public interface NetconfPagingService {
                                                                              @Nullable Integer start, @Nullable Integer num, @Nullable String... expressions);
 
     enum TableType {
-        cfg, stat;
+        cfg, stat, proxystat;
     }
 
 }

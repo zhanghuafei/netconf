@@ -17,6 +17,8 @@ import org.opendaylight.controller.md.sal.dom.api.DOMMountPoint;
 import org.opendaylight.controller.md.sal.dom.api.DOMMountPointService;
 import org.opendaylight.mdsal.binding.dom.codec.api.BindingNormalizedNodeSerializer;
 import org.opendaylight.netconf.sal.connect.netconf.sal.isolation.TransactionScheduler;
+import org.opendaylight.yang.gen.v1.urn.tbd.params.xml.ns.yang.network.topology.rev131021.network.topology.topology.Node;
+import org.opendaylight.yangtools.util.concurrent.ExceptionMapper;
 import org.opendaylight.yangtools.yang.binding.DataObject;
 import org.opendaylight.yangtools.yang.binding.InstanceIdentifier;
 import org.opendaylight.yangtools.yang.data.api.YangInstanceIdentifier;
@@ -47,26 +49,46 @@ public class BindingAcrossDeviceReadWriteTransaction extends BindingAcrossDevice
     @Override
     public <T extends DataObject> CheckedFuture<Optional<T>, ReadFailedException> read(
             InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store, InstanceIdentifier<T> path) {
+        String nodeId = toNodeId(mountPointPath);
+        YangInstanceIdentifier dataPath = codec.toYangInstanceIdentifier(path);
+        ExceptionMapper mapper = new ExceptionMapper<ReadFailedException>("read", ReadFailedException.class) {
+            @Override
+            protected ReadFailedException newWithCause(String message, Throwable cause) {
+                return new ReadFailedException("ne-id=" + nodeId + ": " + message, cause);
+            }
+        };
+
+        CheckedFuture<Optional<NormalizedNode<?,?>>, ReadFailedException> readfuture = read(mountPointPath, store, dataPath);
+
+        return MappingCheckedFuture.create(
+                Futures.transform(readfuture, new DeserializeFunction<T>(dataPath)), mapper);
+    }
+
+    @Override
+    public CheckedFuture<Optional<NormalizedNode<?,?>>, ReadFailedException> read(
+            InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store, YangInstanceIdentifier dataPath) {
         YangInstanceIdentifier yangMountPointPath = codec.toYangInstanceIdentifier(mountPointPath);
+        String nodeId = toNodeId(mountPointPath);
+        ExceptionMapper mapper = new ExceptionMapper<ReadFailedException>("read", ReadFailedException.class) {
+            @Override
+            protected ReadFailedException newWithCause(String message, Throwable cause) {
+                return new ReadFailedException("ne-id=" + nodeId + ": " + message, cause);
+            }
+        };
         Optional<DOMMountPoint> optionalMountPoint = mountService.getMountPoint(yangMountPointPath);
         if (!optionalMountPoint.isPresent()) {
-            SettableFuture<Optional<T>> future = SettableFuture.create();
-            String message = "Mount point not exist: " + mountPointPath;
+            SettableFuture<Optional<NormalizedNode<?,?>>> future = SettableFuture.create();
+            String message = "Mount point not exist: " + nodeId;
             LOG.error(message);
             future.setException(new IllegalStateException(message));
-            return MappingCheckedFuture.create(future, ReadFailedException.MAPPER);
+            return MappingCheckedFuture.create(future, mapper);
         }
         DOMMountPoint mountPoint = optionalMountPoint.get();
         // I think omitting optional check is ok.
         DOMDataBroker db = mountPoint.getService(DOMDataBroker.class).get();
         DOMDataReadOnlyTransaction tx = db.newReadOnlyTransaction();
-        YangInstanceIdentifier dataPath = codec.toYangInstanceIdentifier(path);
-
-        return MappingCheckedFuture.create(
-                Futures.transform(tx.read(store, dataPath), new DeserializeFunction<T>(dataPath)),
-                ReadFailedException.MAPPER);
+        return tx.read(store, dataPath);
     }
-
 
     /**
      * Convert normalize node to binding data object.

@@ -27,6 +27,7 @@ import org.opendaylight.mdsal.binding.dom.codec.api.BindingNormalizedNodeSeriali
 import org.opendaylight.netconf.api.DocumentedException;
 import org.opendaylight.netconf.api.NetconfDocumentedException;
 import org.opendaylight.netconf.sal.connect.api.AcrossDeviceTransCommitFailedException;
+import org.opendaylight.netconf.sal.connect.netconf.sal.isolation.TransactionScheduler;
 import org.opendaylight.netconf.sal.connect.util.RemoteDeviceId;
 import org.opendaylight.yang.gen.v1.urn.tbd.params.xml.ns.yang.network.topology.rev131021.NetworkTopology;
 import org.opendaylight.yang.gen.v1.urn.tbd.params.xml.ns.yang.network.topology.rev131021.NetworkTopologyBuilder;
@@ -56,9 +57,11 @@ import com.google.common.util.concurrent.SettableFuture;
 
 @RunWith(MockitoJUnitRunner.class)
 public class BindingAcrossDeviceWriteTransactionTest {
-	
+
+	// mock一个无任何行为的对象。原理上是创建子类对象。
 	@Mock
     private BindingNormalizedNodeSerializer codec;
+
 	@Mock
     private DOMMountPointService mountService;
 	@Mock
@@ -67,6 +70,11 @@ public class BindingAcrossDeviceWriteTransactionTest {
 	private DOMMountPoint mp2;
 	@Mock
 	private DOMDataBroker db1;
+
+   //  仅使用mock对象来对该域做依赖注入。注入方式包括构造器注入，setter方法注入，以及域注入。 优先注入类型匹配元素，次之匹配名字
+	// 注意不会注入真实的对象。
+   //	@InjectMocks
+//	private String test;
 	
 	@Mock
 	private DOMDataBroker db2;
@@ -77,9 +85,11 @@ public class BindingAcrossDeviceWriteTransactionTest {
 	
 	@Mock
 	private Map.Entry<YangInstanceIdentifier, NormalizedNode<?, ?>> entry;
-	
-	@InjectMocks
-	private BindingAcrossDeviceWriteTransaction  tx;
+
+
+	private TransactionScheduler transScheduler = new TransactionScheduler(30, 100, 100, 25, 1000, 5000);
+
+	private BindingAcrossDeviceWriteTransaction tx;
 	
 	private InstanceIdentifier<NetworkTopology> networkII = InstanceIdentifier.create(NetworkTopology.class);
 	
@@ -90,9 +100,12 @@ public class BindingAcrossDeviceWriteTransactionTest {
 	        .child(Topology.class, new TopologyKey(new TopologyId("topology-netconf"))).child(Node.class,  new NodeKey(new NodeId("2")));
 	
 	private YangInstanceIdentifier topoYangii1;
-	
+
+	//构建各mock对象的方法行为，如调用什么方法以及输入什么参数（有一系列相关方法），将返回什么对象。
     @Before
     public void setUp() {
+		transScheduler.start();
+		tx = new BindingAcrossDeviceWriteTransaction(codec, mountService, transScheduler);
     	Map<QName, Object> topoKeyValue = Maps.newHashMap(); 
     	QName topoKeyName = QName.create(Topology.QNAME, "topology-id"); 
     	topoKeyValue.put(topoKeyName, "topology-netconf");
@@ -170,16 +183,17 @@ public class BindingAcrossDeviceWriteTransactionTest {
 		InstanceIdentifier<NetworkTopology> dataII = InstanceIdentifier.create(NetworkTopology.class);
 		
 		tx.put(ii1, LogicalDatastoreType.CONFIGURATION, dataII, new NetworkTopologyBuilder().build());
-		verify(atx1).put(eq(LogicalDatastoreType.CONFIGURATION), any(), any()); 
+
 		tx.put(ii2, LogicalDatastoreType.CONFIGURATION, dataII, new NetworkTopologyBuilder().build());
-		verify(atx2).put(eq(LogicalDatastoreType.CONFIGURATION), any(), any()); 
-		
 		try {
 			tx.submit().checkedGet();
+
 		} catch (AcrossDeviceTransCommitFailedException e) {
-			assertEquals("Vote phase failed for 'edit-config' or 'validate' returned exception.",  e.getMessage());
+//			assertEquals("Vote phase failed for 'edit-config' or 'validate' returned exception.",  e.getMessage());
 			throw e; 
 		}
+		verify(atx1).put(eq(LogicalDatastoreType.CONFIGURATION), any(), any());
+		verify(atx2).put(eq(LogicalDatastoreType.CONFIGURATION), any(), any());
 	}
 
 }

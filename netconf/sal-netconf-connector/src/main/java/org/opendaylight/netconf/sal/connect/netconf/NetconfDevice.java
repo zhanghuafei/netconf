@@ -255,6 +255,12 @@ public class NetconfDevice
     private void handleSalInitializationFailure(final Throwable throwable,
                                                 final RemoteDeviceCommunicator<NetconfMessage> listener) {
         LOG.error("{}: Initialization in sal failed, disconnecting from device", id, throwable);
+        // 目前发现因为网元在协商成功处理通知时断连，会导致currentRpc=null，而使resetKeepalive抛出该异常。
+        // 该类异常不应该阻止重连机制，且没必要关闭连接。
+        if(throwable instanceof IllegalStateException) {
+            LOG.error("{}: call resetKeepalive when currentRpc==null", id, throwable);
+            return;
+        }
         listener.close();
         onRemoteSessionDown();
         resetMessageTransformer();

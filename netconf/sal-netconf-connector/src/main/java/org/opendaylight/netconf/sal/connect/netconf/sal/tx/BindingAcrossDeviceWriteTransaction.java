@@ -37,11 +37,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.ThreadSafe;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.Map.Entry;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -173,8 +170,7 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
                         LOG.debug("transaction {{}}: commit phase is successful", transactionId);
                         actxResult.set(RpcResultBuilder.<Void>success().build());
                     } else {
-                        String message = String.format("{%s}: commit phase failed for device return error or network " +
-                                "error.", transactionId);
+                        String message = String.format("transaction{%s}: commit phase failed for device return error or network error.", transactionId);
                         // WARN: with last exception.
                         AcrossDeviceTransPartialUnheathyException finalException =
                                 new AcrossDeviceTransPartialUnheathyException(message, exception);
@@ -230,22 +226,11 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
 
             @Override
             public void onFailure(Throwable t) { // tx fail
-                String message = "{" + transactionId + "} " + "vote phase failed for 'edit-config' or 'validate' " +
-                        "returned exception.";
-                message = atachDeviceIdIfPresent(t, message);
+                String message = "transaction{" + transactionId + "}: vote phase failed for 'edit-config' or 'validate' returned exception.";
                 AcrossDeviceTransCommitFailedException finalException = new AcrossDeviceTransCommitFailedException(message, t);
-                finalException.setDetailedErrorMessages(toIdMessages(message));
+                finalException.setDetailedErrorMessages(toIdMessages(t.getMessage()));
                 LOG.warn("", finalException);
                 actxResult.setException(finalException);
-            }
-
-            private String atachDeviceIdIfPresent(Throwable t, String message) {
-                Pattern pattern = Pattern.compile("RemoteDevice\\{.*\\}");
-                Matcher matcher = pattern.matcher(t.getMessage());
-                if (matcher.find()) {
-                    message = matcher.group(0) + ":" + message;
-                }
-                return message;
             }
 
         }, MoreExecutors.directExecutor());
@@ -342,26 +327,25 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
                 if (isAnyMountPointMissing()) {
                     // discard all changes
                     cleanup();
+                    AcrossDeviceTransCommitFailedException finalException = new AcrossDeviceTransCommitFailedException(missingMountPointPaths.size() + " node disconnected");
+                    Map<String, String> detailMsg = toDetailMessage(missingMountPointPaths);
+                    finalException.setDetailedErrorMessages(detailMsg);
                     resultFuture
-                            .setException(new IllegalStateException(missingMountPointPaths.size() + " mount point missing"));
+                            .setException(finalException);
+                    LOG.error("transaction {{}}: failed due to node disconnected during create sub-transaction", transactionId, finalException);
                     return FluentFuture.from(resultFuture);
                 }
                 switch (op.getOperationType()) {
                     case PUT: {
-                        final Entry<YangInstanceIdentifier, NormalizedNode<?, ?>> normalized =
-                                codec.toNormalizedNode(op.getPath(), op.getData());
-                        tx.put(op.getStore(), normalized.getKey(), normalized.getValue());
+                        tx.put(op.getStore(), op.getPath(), op.getData());
                         break;
                     }
                     case MERGE: {
-                        final Entry<YangInstanceIdentifier, NormalizedNode<?, ?>> normalized =
-                                codec.toNormalizedNode(op.getPath(), op.getData());
-                        tx.merge(op.getStore(), normalized.getKey(), normalized.getValue());
+                        tx.merge(op.getStore(), op.getPath(), op.getData());
                         break;
                     }
                     case DELETE: {
-                        YangInstanceIdentifier dataPath = codec.toYangInstanceIdentifier(op.getPath());
-                        tx.delete(op.getStore(), dataPath);
+                        tx.delete(op.getStore(), op.getPath());
                         break;
                     }
                 }
@@ -385,10 +369,19 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
             return FluentFuture.from(resultFuture);
 
         } catch (Exception e) {
-            LOG.error(e.getMessage(), e);
+            LOG.error("Unexpected exception", e);
             resultFuture.setException(e);
             return FluentFuture.from(resultFuture);
         }
+    }
+
+    private Map<String, String> toDetailMessage(Set<InstanceIdentifier<?>> missingMountPointPaths) {
+        Map<String, String> map = new HashMap<>();
+        missingMountPointPaths.forEach(ii -> {
+            String nodeId = toNodeId(ii);
+            map.put(nodeId, "mount point missing");
+        });
+        return map;
     }
 
     private void cleanupOnSuccess() {
@@ -402,14 +395,29 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
     @Override
     public <T extends DataObject> void put(InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store,
                                            InstanceIdentifier<T> path, T data) {
-        TxOperation<T> operation = new TxOperation(PUT, mountPointPath, store, path, data);
+        final Entry<YangInstanceIdentifier, NormalizedNode<?, ?>> normalized =
+                codec.toNormalizedNode(path, data);
+        YangInstanceIdentifier dataPath = normalized.getKey();
+        NormalizedNode<?, ?> normalizedNode = normalized.getValue();
+        put(mountPointPath, store, dataPath, normalizedNode);
+    }
+
+    @Override
+    public void put(InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store, YangInstanceIdentifier dataPath, NormalizedNode<?, ?> normalizedNode) {
+        TxOperation operation = new TxOperation(PUT, mountPointPath, store, dataPath, normalizedNode);
         operationQueue.offer(operation);
     }
 
     @Override
     public <T extends DataObject> void delete(InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store,
                                               InstanceIdentifier<T> path) {
-        TxOperation<T> operation = new TxOperation(DELETE, mountPointPath, store, path);
+        YangInstanceIdentifier dataPath = codec.toYangInstanceIdentifier(path);
+        delete(mountPointPath, store, dataPath);
+    }
+
+    @Override
+    public void delete(InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store, YangInstanceIdentifier dataPath) {
+        TxOperation operation = new TxOperation(DELETE, mountPointPath, store, dataPath);
         operationQueue.offer(operation);
     }
 
@@ -417,7 +425,16 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
     @Override
     public <T extends DataObject> void merge(InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store,
                                              InstanceIdentifier<T> path, T data) {
-        TxOperation<T> operation = new TxOperation(MERGE, mountPointPath, store, path, data);
+        final Entry<YangInstanceIdentifier, NormalizedNode<?, ?>> normalized =
+                codec.toNormalizedNode(path, data);
+        YangInstanceIdentifier dataPath = normalized.getKey();
+        NormalizedNode<?, ?> normalizedNode = normalized.getValue();
+        merge(mountPointPath, store, dataPath, normalizedNode);
+    }
+
+    @Override
+    public void merge(InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store, YangInstanceIdentifier dataPath, NormalizedNode<?, ?> normalizedNode) {
+        TxOperation operation = new TxOperation(MERGE, mountPointPath, store, dataPath, normalizedNode);
         operationQueue.offer(operation);
     }
 
@@ -426,14 +443,16 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
         return true;
     }
 
-    public class TxOperation<T extends DataObject> {
+    public class TxOperation {
         private TxOperationType operationType;
         private InstanceIdentifier<?> mountPointPath;
         private LogicalDatastoreType store;
-        private InstanceIdentifier<T> path;
-        private T data;
+        private YangInstanceIdentifier path;
+        private NormalizedNode<?, ?> data;
 
-        public TxOperation(TxOperationType operationType, InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store, InstanceIdentifier<T> path) {
+        // YangInstanceIdentifier path, NormalizedNode<?, ?> data
+
+        public TxOperation(TxOperationType operationType, InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store, YangInstanceIdentifier path) {
             if (operationType != DELETE) {
                 throw new IllegalArgumentException("Unexpected operation type " + operationType);
             }
@@ -443,7 +462,7 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
             this.path = path;
         }
 
-        public TxOperation(TxOperationType operationType, InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store, InstanceIdentifier<T> path, T data) {
+        public TxOperation(TxOperationType operationType, InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store, YangInstanceIdentifier path, NormalizedNode<?, ?> data) {
             this.operationType = operationType;
             this.mountPointPath = mountPointPath;
             this.store = store;
@@ -463,18 +482,18 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
             return store;
         }
 
-        public InstanceIdentifier<T> getPath() {
+        public YangInstanceIdentifier getPath() {
             return path;
         }
 
-        public T getData() {
+        public NormalizedNode<?, ?> getData() {
             return data;
         }
 
         @Override
         public String toString() {
             String nodeId = toNodeId(mountPointPath);
-            String target = path.getTargetType().getSimpleName();
+            String target = path.getLastPathArgument().getNodeType().getLocalName();
 
             return "TxOperation{" +
                     "operationType=" + operationType +
@@ -491,7 +510,7 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
         PUT
     }
 
-    private String toNodeId(InstanceIdentifier<?> mountPointPath) {
+    public String toNodeId(InstanceIdentifier<?> mountPointPath) {
         return mountPointPath.firstKeyOf(Node.class).getNodeId().getValue();
     }
 
