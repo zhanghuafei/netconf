@@ -53,6 +53,11 @@ public interface AcrossDeviceWriteTransaction extends AutoCloseable {
     @CheckReturnValue
     @NonNull FluentFuture<? extends @NonNull CommitInfo> commit();
 
+    @CheckReturnValue
+    default FluentFuture<? extends @NonNull CommitInfo> commit(int timeout) {
+        throw new UnsupportedOperationException();
+    }
+
     /**
      * Attempts to cancel execution of this transaction. This attempt will fail if the transaction has already completed
      * or has already been cancelled.
