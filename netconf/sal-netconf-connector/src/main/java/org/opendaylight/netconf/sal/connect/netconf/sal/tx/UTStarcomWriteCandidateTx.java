@@ -52,8 +52,7 @@ public class UTStarcomWriteCandidateTx extends WriteCandidateTx {
 		return netOps.validateCandidate(new NetconfRpcFutureCallback(
 				"Validate candidate", id));
 	}
-	
-	
+
     public RemoteDeviceId remoteDeviceId() {
         return id;
     }
@@ -62,9 +61,6 @@ public class UTStarcomWriteCandidateTx extends WriteCandidateTx {
 		resultsFutures.add(validateCandidate());
 		return resultsToTxStatus();
 	}
-	
-	
-	
 
 	@Override
 	public synchronized ListenableFuture<RpcResult<Void>> performCommit() {

@@ -36,6 +36,8 @@ import org.opendaylight.netconf.client.conf.NetconfClientConfiguration;
 import org.opendaylight.netconf.client.conf.NetconfReconnectingClientConfiguration;
 import org.opendaylight.netconf.sal.connect.api.RemoteDevice;
 import org.opendaylight.netconf.sal.connect.api.RemoteDeviceCommunicator;
+import org.opendaylight.netconf.sal.connect.netconf.sal.isolation.PermitRunOutException;
+import org.opendaylight.netconf.sal.connect.netconf.sal.isolation.SessionDownException;
 import org.opendaylight.netconf.sal.connect.netconf.util.NetconfMessageTransformUtil;
 import org.opendaylight.netconf.sal.connect.util.RemoteDeviceId;
 import org.opendaylight.yangtools.yang.common.QName;
@@ -58,6 +60,8 @@ public class NetconfDeviceCommunicator
 
     private final Semaphore semaphore;
     private final int concurentRpcMsgs;
+
+    private AtomicBoolean isSessionDown = new AtomicBoolean(true);
 
     private final Queue<Request> requests = new ArrayDeque<>();
     private NetconfClientSession currentSession;
@@ -110,7 +114,7 @@ public class NetconfDeviceCommunicator
             currentSession = session;
 
             NetconfSessionPreferences netconfSessionPreferences =
-                                             NetconfSessionPreferences.fromNetconfSession(session);
+                    NetconfSessionPreferences.fromNetconfSession(session);
             LOG.trace("{}: Session advertised capabilities: {}", id,
                     netconfSessionPreferences);
 
@@ -132,6 +136,8 @@ public class NetconfDeviceCommunicator
             if (!firstConnectionFuture.isDone()) {
                 firstConnectionFuture.set(netconfSessionPreferences.getNetconfDeviceCapabilities());
             }
+
+            isSessionDown.compareAndSet(true, false);
         } finally {
             sessionLock.unlock();
         }
@@ -216,6 +222,7 @@ public class NetconfDeviceCommunicator
         }
 
         isSessionClosing.set(false);
+        isSessionDown.compareAndSet(false, true);
     }
 
     private RpcResult<NetconfMessage> createSessionDownRpcResult() {
@@ -224,9 +231,9 @@ public class NetconfDeviceCommunicator
     }
 
     private static RpcResult<NetconfMessage> createErrorRpcResult(final RpcError.ErrorType errorType,
-            final String message) {
+                                                                  final String message) {
         return RpcResultBuilder.<NetconfMessage>failed()
-            .withError(errorType, NetconfDocumentedException.ErrorTag.OPERATION_FAILED.getTagValue(), message).build();
+                .withError(errorType, NetconfDocumentedException.ErrorTag.OPERATION_FAILED.getTagValue(), message).build();
     }
 
     @Override
@@ -243,6 +250,7 @@ public class NetconfDeviceCommunicator
         // onSessionTerminated is called directly by disconnect, no need to compare and set isSessionClosing.
         LOG.warn("{}: Session terminated {}", id, reason);
         tearDown(reason.getErrorMessage());
+
     }
 
     @Override
@@ -345,14 +353,17 @@ public class NetconfDeviceCommunicator
     public ListenableFuture<RpcResult<NetconfMessage>> sendRequest(final NetconfMessage message, final QName rpc) {
         sessionLock.lock();
         try {
-            if (semaphore != null && !semaphore.tryAcquire()) {
-                LOG.warn("Limit of concurrent rpc messages was reached (limit :" + concurentRpcMsgs
-                    + "). Rpc reply message is needed. Discarding request of Netconf device with id" + id.getName());
-                return Futures.immediateFailedFuture(new NetconfDocumentedException(
-                        "Limit of rpc messages was reached (Limit :" + concurentRpcMsgs
-                        + ") waiting for emptying the queue of Netconf device with id" + id.getName()));
-            }
 
+            if (isSessionDown.get() == false && semaphore != null && !semaphore.tryAcquire()) {
+                // 这么改，单网元事务触碰concurrent limit就直接导致事务执行线程抛异常退出。
+                // WARN: 使用异常控制流程, Bad Smell
+                throw new PermitRunOutException() {
+                    @Override
+                    public String getMessage() {
+                        return id.getName() + ": Permit runs out. limit: " + concurentRpcMsgs;
+                    }
+                };
+            }
             return sendRequestWithLock(message, rpc);
         } finally {
             sessionLock.unlock();

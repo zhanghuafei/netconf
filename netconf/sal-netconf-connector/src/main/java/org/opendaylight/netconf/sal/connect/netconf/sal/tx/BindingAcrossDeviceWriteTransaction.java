@@ -9,10 +9,9 @@
 package org.opendaylight.netconf.sal.connect.netconf.sal.tx;
 
 import com.google.common.base.Optional;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
+import com.google.common.collect.*;
 import com.google.common.util.concurrent.*;
+import org.checkerframework.checker.nullness.compatqual.NullableDecl;
 import org.eclipse.jdt.annotation.NonNull;
 import org.eclipse.jdt.annotation.Nullable;
 import org.opendaylight.controller.md.sal.common.api.data.LogicalDatastoreType;
@@ -24,6 +23,7 @@ import org.opendaylight.mdsal.binding.dom.codec.api.BindingNormalizedNodeSeriali
 import org.opendaylight.mdsal.common.api.CommitInfo;
 import org.opendaylight.netconf.sal.connect.api.AcrossDeviceTransCommitFailedException;
 import org.opendaylight.netconf.sal.connect.api.AcrossDeviceTransPartialUnheathyException;
+import org.opendaylight.netconf.sal.connect.netconf.sal.isolation.PermitRunOutException;
 import org.opendaylight.netconf.sal.connect.netconf.sal.isolation.TransactionScheduler;
 import org.opendaylight.netconf.sal.connect.util.RemoteDeviceId;
 import org.opendaylight.yang.gen.v1.urn.tbd.params.xml.ns.yang.network.topology.rev131021.network.topology.topology.Node;
@@ -40,6 +40,8 @@ import javax.annotation.concurrent.ThreadSafe;
 import java.util.*;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -73,8 +75,7 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
 
     private Map<YangInstanceIdentifier, DOMDataWriteTransaction> mountPointPathToTx = Maps.newHashMap(); // cohorts
 
-    private LinkedList<TxOperation> operationQueue = new LinkedList<>();
-
+    private MountOperationSet mountOperationSet = new MountOperationSet();
 
     public BindingAcrossDeviceWriteTransaction(BindingNormalizedNodeSerializer codec,
                                                DOMMountPointService mountService, TransactionScheduler transScheduler) {
@@ -82,11 +83,11 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
         this.mountService = mountService;
         this.lockPool = transScheduler;
         transactionId = transactionCounter.incrementAndGet();
-        LOG.debug("transaction {{}}: new created.", transactionId);
+        LOG.debug("tran saction {{}}: new created.", transactionId);
     }
 
     public List<TxOperation> getOperations() {
-        return operationQueue;
+        return mountOperationSet.getOperations();
     }
 
     private boolean isAnyMountPointMissing() {
@@ -97,8 +98,8 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
         return transactionId;
     }
 
-    private @Nullable DOMDataWriteTransaction getOrCreate(InstanceIdentifier<?> mountPointPath,
-                                                          YangInstanceIdentifier yangMountPointPath) {
+    private @Nullable DOMDataWriteTransaction getOrCreate(InstanceIdentifier<?> mountPointPath) {
+        YangInstanceIdentifier yangMountPointPath = codec.toYangInstanceIdentifier(mountPointPath);
         DOMDataWriteTransaction tx = mountPointPathToTx.get(yangMountPointPath);
         if (tx == null) {
             Optional<DOMMountPoint> optionalMountPoint = mountService.getMountPoint(yangMountPointPath);
@@ -203,25 +204,20 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
 
             @Override
             public void onSuccess(RpcResult<Void> innerVoteResult) {
-                if (innerVoteResult.isSuccessful()) {
-                    LOG.debug("transaction {{}}: sending commit message.", transactionId);
-                    mountPointPathToTx
-                            .entrySet()
-                            .forEach(
-                                    entry -> {
-                                        UTStarcomWriteCandidateTx tx = (UTStarcomWriteCandidateTx) entry.getValue();
-                                        ListenableFuture<RpcResult<Void>> commitResult =
-                                                tx.doCommit(voteResult);
-                                        Futures.addCallback(commitResult,
-                                                txResultAggregator.new CommitResultCallBack(tx.remoteDeviceId()), MoreExecutors.directExecutor());
-                                    });
 
-                } else {
-                    // tx fail
-                    LOG.error("transaction {{}}: fail due to unexpected exception", transactionId,
-                            new IllegalStateException(
-                                    "Unexpected to hit here"));
-                }
+                LOG.debug("transaction {{}}: sending commit message.", transactionId);
+                mountPointPathToTx
+                        .entrySet()
+                        .forEach(
+                                entry -> {
+                                    UTStarcomWriteCandidateTx tx = (UTStarcomWriteCandidateTx) entry.getValue();
+                                    ListenableFuture<RpcResult<Void>> commitResult =
+                                            tx.doCommit(voteResult);
+                                    Futures.addCallback(commitResult,
+                                            txResultAggregator.new CommitResultCallBack(tx.remoteDeviceId()), MoreExecutors.directExecutor());
+                                });
+
+
             }
 
             @Override
@@ -249,7 +245,7 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
 
             @Override
             public void onFailure(Throwable t) {
-                if(t instanceof AcrossDeviceTransPartialUnheathyException) {
+                if (t instanceof AcrossDeviceTransPartialUnheathyException) {
                     cleanupOnSuccess();
                     return;
                 }
@@ -272,6 +268,32 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
             idToErr.put(id, message);
         }
         return idToErr;
+    }
+
+    private ListenableFuture<RpcResult<Void>> toLockResult() {
+        List<ListenableFuture<RpcResult<Void>>> txResults = Lists.newArrayList();
+        mountPointPathToTx.entrySet().stream()
+                .forEach(entry -> txResults.add(((UTStarcomWriteCandidateTx) entry.getValue()).resultsToTxStatus()));
+        final SettableFuture<RpcResult<Void>> transformed = SettableFuture.create();
+
+        Futures.addCallback(Futures.allAsList(txResults), new FutureCallback<List<RpcResult<Void>>>() {
+            @Override
+            public void onSuccess(final List<RpcResult<Void>> txResults) {
+                LOG.debug("transaction {{}}: lock phase is successful.", transactionId);
+
+                if (!transformed.isDone()) {
+                    transformed.set(RpcResultBuilder.<Void>success().build());
+                }
+            }
+
+            @Override
+            public void onFailure(final Throwable throwable) {
+                // timeout or returned error.
+                // WARN: NOT sure if object throwable have the certain type of NetconfDocumentedException.
+                transformed.setException(throwable);
+            }
+        }, MoreExecutors.directExecutor());
+        return transformed;
     }
 
     private ListenableFuture<RpcResult<Void>> toVoteResult() {
@@ -306,7 +328,7 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
                     ".");
         }
 
-        if (operationQueue.isEmpty()) {
+        if (mountOperationSet.isEmpty()) {
             LOG.debug("transaction {{}}: operation queue is empty, immediately return success.", transactionId);
             return CommitInfo.emptyFluentFuture();
         }
@@ -316,64 +338,104 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
     }
 
 
-    public FluentFuture<? extends @NonNull CommitInfo> execute() {
+    public FluentFuture<? extends @NonNull CommitInfo> execute(ExecutorService requestSenderExecutor) {
         SettableFuture<CommitInfo> resultFuture = SettableFuture.create();
 
-        try {
-            int size = operationQueue.size();
-            for (int i = 0; i < size; i++) {
-                TxOperation op = operationQueue.poll();
-                YangInstanceIdentifier yangMountPointPath = codec.toYangInstanceIdentifier(op.getMountPointPath());
-                DOMDataWriteTransaction tx = getOrCreate(op.getMountPointPath(), yangMountPointPath);
-                if (isAnyMountPointMissing()) {
-                    // discard all changes
-                    cleanup();
-                    AcrossDeviceTransCommitFailedException finalException = new AcrossDeviceTransCommitFailedException(missingMountPointPaths.size() + " node disconnected");
-                    Map<String, String> detailMsg = toDetailMessage(missingMountPointPaths);
-                    finalException.setDetailedErrorMessages(detailMsg);
-                    resultFuture
-                            .setException(finalException);
-                    LOG.error("transaction {{}}: failed due to node disconnected during create sub-transaction", transactionId, finalException);
-                    return FluentFuture.from(resultFuture);
+        requestSenderExecutor.submit(new Runnable() {
+            @Override
+            public void run() {
+
+                for (InstanceIdentifier<?> ii : mountOperationSet.IIsByNe()) {
+                    getOrCreate(ii);
                 }
-                switch (op.getOperationType()) {
-                    case PUT: {
-                        tx.put(op.getStore(), op.getPath(), op.getData());
-                        break;
+
+                Futures.addCallback(toLockResult(), new FutureCallback<RpcResult<Void>>() {
+                    @Override
+                    public void onSuccess(@NullableDecl RpcResult<Void> result) {
+                        try {
+                            // 迭代事务直到请求发完
+                            while (true) {
+                                // 迭代网元
+                                for (Queue<TxOperation> operations : mountOperationSet.operationsByNe()) {
+                                    Iterator<TxOperation> iterator = operations.iterator();
+                                    // 迭代单个网元的netconf请求
+                                    try {
+                                        while (iterator.hasNext()) {
+                                            TxOperation op = iterator.next();
+
+                                            DOMDataWriteTransaction tx = getOrCreate(op.getMountPointPath());
+                                            if (isAnyMountPointMissing()) {
+                                                // discard all changes
+                                                cleanup();
+                                                AcrossDeviceTransCommitFailedException finalException = new AcrossDeviceTransCommitFailedException(missingMountPointPaths.size() + " node disconnected");
+                                                Map<String, String> detailMsg = toDetailMessage(missingMountPointPaths);
+                                                finalException.setDetailedErrorMessages(detailMsg);
+                                                resultFuture
+                                                        .setException(finalException);
+                                                LOG.error("transaction {{}}: failed due to node disconnected during create sub-transaction", transactionId, finalException);
+                                                return;
+                                            }
+                                            switch (op.getOperationType()) {
+                                                case PUT: {
+                                                    tx.put(op.getStore(), op.getPath(), op.getData());
+                                                    break;
+                                                }
+                                                case MERGE: {
+                                                    tx.merge(op.getStore(), op.getPath(), op.getData());
+                                                    break;
+                                                }
+                                                case DELETE: {
+                                                    tx.delete(op.getStore(), op.getPath());
+                                                    break;
+                                                }
+                                            }
+                                            iterator.remove();
+                                        }
+                                    } catch (PermitRunOutException exception) {
+                                        LOG.debug(exception.getMessage());
+                                    }
+                                }
+
+                                if (mountOperationSet.isEmpty()) {
+                                    break;
+                                } else if (mountOperationSet.neCount() <= 2) {
+                                    // 事务涉及网元过少则增加等待时间
+                                    TimeUnit.SECONDS.sleep(5);
+                                }
+                            }
+
+                            ListenableFuture<RpcResult<Void>> acTxResult = performCommit();
+                            Futures.addCallback(acTxResult, new FutureCallback<RpcResult<Void>>() {
+
+                                @Override
+                                public void onSuccess(RpcResult<Void> result) {
+                                    resultFuture.set(CommitInfo.empty());
+                                }
+
+                                @Override
+                                public void onFailure(Throwable t) {
+                                    resultFuture.setException(t);
+                                }
+
+                            }, MoreExecutors.directExecutor());
+                        } catch (Exception e) {
+                            LOG.error("Unexpected exception", e);
+                            resultFuture.setException(e);
+                        }
                     }
-                    case MERGE: {
-                        tx.merge(op.getStore(), op.getPath(), op.getData());
-                        break;
+
+                    @Override
+                    public void onFailure(Throwable t) {
+                        String message = "transaction{" + transactionId + "}: lock phase failed for exception or NE returned error.";
+                        AcrossDeviceTransCommitFailedException finalException = new AcrossDeviceTransCommitFailedException(message, t);
+                        finalException.setDetailedErrorMessages(toIdMessages(t.getMessage()));
+                        LOG.warn("", finalException);
+                        resultFuture.setException(finalException);
                     }
-                    case DELETE: {
-                        tx.delete(op.getStore(), op.getPath());
-                        break;
-                    }
-                }
+                }, requestSenderExecutor);
             }
-
-            ListenableFuture<RpcResult<Void>> acTxResult = performCommit();
-
-            Futures.addCallback(acTxResult, new FutureCallback<RpcResult<Void>>() {
-
-                @Override
-                public void onSuccess(RpcResult<Void> result) {
-                    resultFuture.set(CommitInfo.empty());
-                }
-
-                @Override
-                public void onFailure(Throwable t) {
-                    resultFuture.setException(t);
-                }
-
-            }, MoreExecutors.directExecutor());
-            return FluentFuture.from(resultFuture);
-
-        } catch (Exception e) {
-            LOG.error("Unexpected exception", e);
-            resultFuture.setException(e);
-            return FluentFuture.from(resultFuture);
-        }
+        });
+        return FluentFuture.from(resultFuture);
     }
 
     private Map<String, String> toDetailMessage(Set<InstanceIdentifier<?>> missingMountPointPaths) {
@@ -406,7 +468,7 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
     @Override
     public void put(InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store, YangInstanceIdentifier dataPath, NormalizedNode<?, ?> normalizedNode) {
         TxOperation operation = new TxOperation(PUT, mountPointPath, store, dataPath, normalizedNode);
-        operationQueue.offer(operation);
+        mountOperationSet.offer(operation);
     }
 
     @Override
@@ -419,7 +481,7 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
     @Override
     public void delete(InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store, YangInstanceIdentifier dataPath) {
         TxOperation operation = new TxOperation(DELETE, mountPointPath, store, dataPath);
-        operationQueue.offer(operation);
+        mountOperationSet.offer(operation);
     }
 
 
@@ -436,7 +498,7 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
     @Override
     public void merge(InstanceIdentifier<?> mountPointPath, LogicalDatastoreType store, YangInstanceIdentifier dataPath, NormalizedNode<?, ?> normalizedNode) {
         TxOperation operation = new TxOperation(MERGE, mountPointPath, store, dataPath, normalizedNode);
-        operationQueue.offer(operation);
+        mountOperationSet.offer(operation);
     }
 
     @Override
@@ -515,4 +577,64 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
         return mountPointPath.firstKeyOf(Node.class).getNodeId().getValue();
     }
 
+
+    public class MountOperationSet {
+
+        private Map<InstanceIdentifier<?>, Queue<TxOperation>> operationsMap = new HashMap<>();
+
+        void offer(TxOperation operation) {
+            Queue<TxOperation> operations = operationsMap.get(operation.getMountPointPath());
+            if (operations == null) {
+                operations = new LinkedList<>();
+                operationsMap.put(operation.getMountPointPath(), operations);
+            }
+            operations.offer(operation);
+        }
+
+        List<TxOperation> getOperations() {
+            if (operationsMap.isEmpty()) {
+                return Collections.emptyList();
+            }
+
+            List<TxOperation> ops = Lists.newArrayList();
+
+            for (Queue<TxOperation> operations : operationsMap.values()) {
+                if (operations.isEmpty()) {
+                    continue;
+                }
+                ops.addAll(operations);
+            }
+            return ops;
+        }
+
+        Queue<TxOperation> get(InstanceIdentifier<?> ii) {
+            return operationsMap.get(ii);
+        }
+
+        boolean isEmpty() {
+            if (operationsMap.isEmpty()) {
+                return true;
+            }
+
+            for (Queue<TxOperation> operations : operationsMap.values()) {
+                if (!operations.isEmpty()) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        Collection<Queue<TxOperation>> operationsByNe() {
+            return operationsMap.values();
+        }
+
+        private Collection<InstanceIdentifier<?>> IIsByNe() {
+            return operationsMap.keySet();
+        }
+
+        int neCount() {
+            return operationsMap.entrySet().size();
+        }
+    }
 }

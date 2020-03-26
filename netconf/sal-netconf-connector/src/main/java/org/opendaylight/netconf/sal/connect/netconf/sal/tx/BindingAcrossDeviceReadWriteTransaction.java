@@ -8,6 +8,11 @@
 
 package org.opendaylight.netconf.sal.connect.netconf.sal.tx;
 
+import com.google.common.base.Function;
+import com.google.common.base.Optional;
+import com.google.common.util.concurrent.CheckedFuture;
+import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.SettableFuture;
 import org.opendaylight.controller.md.sal.common.api.MappingCheckedFuture;
 import org.opendaylight.controller.md.sal.common.api.data.LogicalDatastoreType;
 import org.opendaylight.controller.md.sal.common.api.data.ReadFailedException;
@@ -16,8 +21,8 @@ import org.opendaylight.controller.md.sal.dom.api.DOMDataReadOnlyTransaction;
 import org.opendaylight.controller.md.sal.dom.api.DOMMountPoint;
 import org.opendaylight.controller.md.sal.dom.api.DOMMountPointService;
 import org.opendaylight.mdsal.binding.dom.codec.api.BindingNormalizedNodeSerializer;
+import org.opendaylight.netconf.sal.connect.netconf.sal.isolation.PermitRunOutException;
 import org.opendaylight.netconf.sal.connect.netconf.sal.isolation.TransactionScheduler;
-import org.opendaylight.yang.gen.v1.urn.tbd.params.xml.ns.yang.network.topology.rev131021.network.topology.topology.Node;
 import org.opendaylight.yangtools.util.concurrent.ExceptionMapper;
 import org.opendaylight.yangtools.yang.binding.DataObject;
 import org.opendaylight.yangtools.yang.binding.InstanceIdentifier;
@@ -25,12 +30,6 @@ import org.opendaylight.yangtools.yang.data.api.YangInstanceIdentifier;
 import org.opendaylight.yangtools.yang.data.api.schema.NormalizedNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import com.google.common.base.Function;
-import com.google.common.base.Optional;
-import com.google.common.util.concurrent.CheckedFuture;
-import com.google.common.util.concurrent.Futures;
-import com.google.common.util.concurrent.SettableFuture;
 
 @SuppressWarnings("deprecation")
 public class BindingAcrossDeviceReadWriteTransaction extends BindingAcrossDeviceWriteTransaction implements
@@ -87,7 +86,13 @@ public class BindingAcrossDeviceReadWriteTransaction extends BindingAcrossDevice
         // I think omitting optional check is ok.
         DOMDataBroker db = mountPoint.getService(DOMDataBroker.class).get();
         DOMDataReadOnlyTransaction tx = db.newReadOnlyTransaction();
-        return tx.read(store, dataPath);
+        try {
+            return tx.read(store, dataPath);
+        } catch (PermitRunOutException e) {
+            SettableFuture<Optional<NormalizedNode<?,?>>> future = SettableFuture.create();
+            future.setException(e);
+            return MappingCheckedFuture.create(future, mapper);
+        }
     }
 
     /**
@@ -96,7 +101,7 @@ public class BindingAcrossDeviceReadWriteTransaction extends BindingAcrossDevice
     private final class DeserializeFunction<S> implements Function<Optional<NormalizedNode<?, ?>>, Optional<S>> {
         private YangInstanceIdentifier dataPath;
 
-        public DeserializeFunction(YangInstanceIdentifier dataPath) {
+        private DeserializeFunction(YangInstanceIdentifier dataPath) {
             this.dataPath = dataPath;
         }
 

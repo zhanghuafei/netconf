@@ -40,9 +40,11 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class TransactionScheduler implements AutoCloseable {
     private static final Logger LOG = LoggerFactory.getLogger(TransactionScheduler.class);
-    private static final String THREAD_NAME = "ac-device-trans-with-lock-thread";
+    private static final String DEVICE_LOCK_SCHEULER = "ac-device-trans-device-lock-shceduler";
     private static final String CALLBACK_THREAD_NAME = "ac-device-trans-callback-thread";
+    private static final String TRANS_REQUEST_SENDER = "ac-device-trans-request-sender";
     private static final String NETCONF_METRIC_NAME = "netconf";
+    // 任务在队列等待时间,因网元锁的剧烈竞争，可能导致事务的长时间等待
     private static final int DEFAULT_TASK_WAIT_TIMEOUT = 300;
     private static final int DEFAULT_POSTPONE_TIME__MIN_MILLIS = 1000;
     private static final int DEFAULT_POSTPONE_TIME__MAX_MILLIS = 5000;
@@ -53,9 +55,9 @@ public class TransactionScheduler implements AutoCloseable {
     // 达到该容量限制，应大致保证该容量不会继续增长
     private static final int DEFAULT_TASK_CONGESTION_WATERMARK = DEFAULT_TASK_WAIT_TIMEOUT / 3;
 
-    private ExecutorService taskExecutor = Executors.newSingleThreadExecutor(new TransactionThreadFactory(THREAD_NAME));
-
+    private ExecutorService deviceLockSchedulerExecutor = Executors.newSingleThreadExecutor(new TransactionThreadFactory(DEVICE_LOCK_SCHEULER));
     private ExecutorService taskCallbackExecutor = Executors.newSingleThreadExecutor(new TransactionThreadFactory(CALLBACK_THREAD_NAME));
+    private ExecutorService requestSenderExecutor = Executors.newFixedThreadPool(10, new TransactionThreadFactory(TRANS_REQUEST_SENDER));
 
     // transaction will not set failed instantly after timeout.
     // task total time = wait time + execute time;
@@ -262,8 +264,8 @@ public class TransactionScheduler implements AutoCloseable {
             if (tryAcquire(lockClaimed)) {
                 LOG.debug("transaction {{}}: acquire device lock {} successfully", wtx.getTransactionId(), lockClaimed);
                 // 执行事务
-                // 考虑再分配到新的线程池执行以降低concurrent-rpc-limit引发阻塞造成的影响？
-                wtx.execute().addCallback(new FutureCallback<CommitInfo>() {
+                // 分配到新的线程池执行事务，以避免某条事务达到concurrent-rpc-limit限值而阻塞其他其他事务执行
+                wtx.execute(requestSenderExecutor).addCallback(new FutureCallback<CommitInfo>() {
                     @Override
                     public void onSuccess(@NullableDecl CommitInfo result) {
                         future.set(result);
@@ -296,7 +298,7 @@ public class TransactionScheduler implements AutoCloseable {
     public void start() {
         // 注册MXBean
         transactionManagement.register();
-        taskExecutor.submit(() -> {
+        deviceLockSchedulerExecutor.submit(() -> {
 
                     while (true) {
                         DelayTask task = null;
