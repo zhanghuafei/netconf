@@ -283,9 +283,9 @@ public abstract class AbstractWriteTx implements DOMDataWriteTransaction {
                 }
                 final String message;
                 if (error.getMessage() == null || error.getMessage().isEmpty()) {
-                    message = id + ": RPC during tx failed";
+                    message = "RPC during tx failed";
                 } else {
-                    message = id + ": " + error.getMessage();
+                    message = error.getMessage();
                 }
                 final NetconfDocumentedException exception = new NetconfDocumentedException(message,
                         eType,
