@@ -262,12 +262,13 @@ public class BindingAcrossDeviceWriteTransaction implements AcrossDeviceWriteTra
     }
 
     private static Map<String, String> toIdMessages(String message) {
-        Pattern pattern = Pattern.compile("RemoteDevice\\{(.*)\\}");
+        Pattern pattern = Pattern.compile("RemoteDevice\\{(.*)\\}:");
         Matcher matcher = pattern.matcher(message);
         String id;
         Map<String, String> idToErr = Maps.newHashMap();
         if (matcher.find()) {
             id = matcher.group(1);
+            message = matcher.replaceFirst("").trim();
             idToErr.put(id, message);
         }
         return idToErr;

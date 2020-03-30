@@ -198,7 +198,7 @@ public class UTStarcomWriteCandidateTx extends WriteCandidateTx {
 				if (error.getMessage() == null || error.getMessage().isEmpty()) {
 					message = id + ":RPC during tx failed";
 				} else {
-					message = error.getMessage();
+					message = id + ": " + error.getMessage();
 				}
 				final NetconfDocumentedException exception = new NetconfDocumentedException(
 						message, eType, DocumentedException.ErrorTag.from(error
